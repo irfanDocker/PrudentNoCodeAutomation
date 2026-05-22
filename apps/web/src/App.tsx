@@ -253,6 +253,34 @@ function textToVariables(value: string) {
   }, {});
 }
 
+function VariablesField({
+  variables,
+  onChange,
+  label = "Variables (key=value)"
+}: {
+  variables: Record<string, string>;
+  onChange: (variables: Record<string, string>) => void;
+  label?: string;
+}) {
+  const [rawText, setRawText] = useState(() => variablesToText(variables));
+
+  useEffect(() => {
+    setRawText(variablesToText(variables));
+  }, [variables]);
+
+  return (
+    <label className="wide-field">
+      {label}
+      <textarea
+        rows={4}
+        value={rawText}
+        onChange={(event) => setRawText(event.target.value)}
+        onBlur={() => onChange(textToVariables(rawText))}
+      />
+    </label>
+  );
+}
+
 function resolveTokens(value: string, variables: Record<string, string>) {
   return value.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (match, key: string) => variables[key] ?? match);
 }
@@ -1393,12 +1421,7 @@ function App() {
     onChange: (variables: Record<string, string>) => void,
     label = "Variables (key=value)"
   ) {
-    return (
-      <label className="wide-field">
-        {label}
-        <textarea rows={4} value={variablesToText(variables)} onChange={(event) => onChange(textToVariables(event.target.value))} />
-      </label>
-    );
+    return <VariablesField variables={variables} onChange={onChange} label={label} />;
   }
 
   function renderEnvironments() {
