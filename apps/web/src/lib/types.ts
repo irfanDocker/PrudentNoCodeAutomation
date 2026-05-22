@@ -50,10 +50,12 @@ export interface RunRecord {
   testTitle: string;
   suiteName: string;
   status: RunStatus;
+  executionMode?: "UI_DEMO" | "PLAYWRIGHT_API";
   browser: "chromium" | "chrome" | "firefox" | "webkit";
   environment: string;
   durationMs: number;
   startedAt: string;
+  stepResults?: RunStepResult[];
   failedStepId?: string;
   error?: string;
   screenshot?: string;
@@ -61,3 +63,14 @@ export interface RunRecord {
   video?: string;
 }
 
+export interface RunStepResult {
+  stepId: string;
+  stepNumber: number;
+  actionType: ActionType;
+  locatorType: LocatorType | "";
+  locatorValue: string;
+  expectedResult: string;
+  status: RunStatus;
+  durationMs: number;
+  message: string;
+}

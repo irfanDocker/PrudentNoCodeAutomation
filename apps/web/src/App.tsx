@@ -16,11 +16,17 @@ import {
   Trash2,
   XCircle
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { actionTypes, initialRuns, initialSuites, initialTests, locatorTypes, suiteTypes } from "./lib/mockData";
 import type { ActionType, LocatorType, RunRecord, SuiteType, TestCase, TestStep, TestSuite } from "./lib/types";
 
 type Page = "dashboard" | "tests" | "builder" | "suites" | "runs" | "debug" | "reports";
+
+const storageKeys = {
+  tests: "prudent.tests",
+  suites: "prudent.suites",
+  runs: "prudent.runs"
+};
 
 const navItems: Array<{ id: Page; label: string; icon: typeof Activity }> = [
   { id: "dashboard", label: "Dashboard", icon: Activity },
@@ -34,6 +40,15 @@ const navItems: Array<{ id: Page; label: string; icon: typeof Activity }> = [
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function formatDate(value: string) {
@@ -82,16 +97,30 @@ function StatusBadge({ status }: { status: RunRecord["status"] | TestCase["statu
 
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
-  const [tests, setTests] = useState<TestCase[]>(initialTests);
-  const [suites, setSuites] = useState<TestSuite[]>(initialSuites);
-  const [runs, setRuns] = useState<RunRecord[]>(initialRuns);
-  const [selectedTestId, setSelectedTestId] = useState(initialTests[0]?.id ?? "");
+  const [tests, setTests] = useState<TestCase[]>(() => readStored(storageKeys.tests, initialTests));
+  const [suites, setSuites] = useState<TestSuite[]>(() => readStored(storageKeys.suites, initialSuites));
+  const [runs, setRuns] = useState<RunRecord[]>(() => readStored(storageKeys.runs, initialRuns));
+  const [selectedTestId, setSelectedTestId] = useState(() => readStored(storageKeys.tests, initialTests)[0]?.id ?? "");
+  const [selectedRunId, setSelectedRunId] = useState(() => readStored(storageKeys.runs, initialRuns)[0]?.id ?? "");
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<SuiteType | "ALL">("ALL");
   const [browser, setBrowser] = useState<RunRecord["browser"]>("chromium");
   const [headless, setHeadless] = useState(true);
 
   const selectedTest = tests.find((test) => test.id === selectedTestId) ?? tests[0];
+  const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.tests, JSON.stringify(tests));
+  }, [tests]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.suites, JSON.stringify(suites));
+  }, [suites]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.runs, JSON.stringify(runs));
+  }, [runs]);
 
   const filteredTests = useMemo(() => {
     return tests.filter((test) => {
@@ -191,10 +220,34 @@ function App() {
       testTitle: test.title,
       suiteName: test.groupType === "CUSTOM" ? "Custom Test Suite" : `${test.groupType[0]}${test.groupType.slice(1).toLowerCase()} Test`,
       status,
+      executionMode: "UI_DEMO",
       browser,
       environment: "qa",
       durationMs: status === "FAILED" ? 22400 : 14250,
       startedAt: new Date().toISOString(),
+      stepResults: test.steps.map((step, index) => {
+        const stepStatus =
+          status === "FAILED" && step.id === failedStep?.id
+            ? "FAILED"
+            : status === "FAILED" && failedStep && step.stepNumber > failedStep.stepNumber
+              ? "SKIPPED"
+              : "PASSED";
+
+        return {
+          stepId: step.id,
+          stepNumber: step.stepNumber,
+          actionType: step.actionType,
+          locatorType: step.locatorType,
+          locatorValue: step.locatorValue,
+          expectedResult: step.expectedResult,
+          status: stepStatus,
+          durationMs: 600 + index * 320,
+          message:
+            stepStatus === "FAILED"
+              ? `Could not complete ${step.actionType} using ${step.locatorType || "locator"}=${step.locatorValue || "value"}`
+              : `${step.actionType} completed`
+        };
+      }),
       failedStepId: failedStep?.id,
       error: status === "FAILED" ? `Timeout waiting for ${failedStep?.locatorType || "locator"}=${failedStep?.locatorValue || "value"}` : undefined,
       screenshot: status === "FAILED" ? `artifacts/runs/${uid("run")}/failed-step-${failedStep?.stepNumber}.png` : undefined,
@@ -202,6 +255,7 @@ function App() {
       video: status === "FAILED" ? "artifacts/runs/latest/videos/page.webm" : undefined
     };
     setRuns((current) => [run, ...current]);
+    setSelectedRunId(run.id);
     setPage(status === "FAILED" ? "debug" : "runs");
   }
 
@@ -243,8 +297,10 @@ function App() {
             <h2>Latest runs</h2>
             <button className="icon-button" title="Run smoke suite"><Play size={18} /></button>
           </div>
-          <RunTable runs={runs.slice(0, 5)} />
+          <RunTable runs={runs.slice(0, 5)} selectedRunId={selectedRunId} onSelect={(run) => setSelectedRunId(run.id)} />
         </section>
+
+        {selectedRun && renderRunDetail(selectedRun)}
 
         <div className="split">
           <section className="panel">
@@ -405,12 +461,57 @@ function App() {
 
   function renderRuns() {
     return (
-      <section className="panel">
-        <div className="panel-title">
-          <h2>Run history</h2>
-          <button className="secondary" onClick={() => runs[0] && exportRun(runs[0])}><Download size={18} /> Export latest</button>
+      <>
+        {selectedRun && renderRunDetail(selectedRun)}
+        <section className="panel">
+          <div className="panel-title">
+            <h2>Run history</h2>
+            <button className="secondary" onClick={() => runs[0] && exportRun(runs[0])}><Download size={18} /> Export latest</button>
+          </div>
+          <RunTable runs={runs} selectedRunId={selectedRunId} onSelect={(run) => setSelectedRunId(run.id)} onExport={exportRun} />
+        </section>
+      </>
+    );
+  }
+
+  function renderRunDetail(run: RunRecord) {
+    return (
+      <section className={`run-detail ${run.status.toLowerCase()}`}>
+        <div className="run-detail-header">
+          <div>
+            <StatusBadge status={run.status} />
+            <h2>{run.testTitle}</h2>
+            <p>{run.id} · {run.browser} · {run.environment} · {formatMs(run.durationMs)}</p>
+          </div>
+          <div className="run-mode">
+            <span>Execution</span>
+            <strong>{run.executionMode === "PLAYWRIGHT_API" ? "Playwright API" : "UI demo"}</strong>
+          </div>
         </div>
-        <RunTable runs={runs} onExport={exportRun} />
+
+        <div className="step-results">
+          <div className="step-results-head">
+            <span>#</span><span>Action</span><span>Locator</span><span>Expected</span><span>Status</span><span>Duration</span><span>Message</span>
+          </div>
+          {run.stepResults?.length ? (
+            run.stepResults.map((step) => (
+              <div className="step-result-row" key={`${run.id}-${step.stepId}`}>
+                <strong>{step.stepNumber}</strong>
+                <span>{step.actionType}</span>
+                <span>{step.locatorType ? `${step.locatorType}: ${step.locatorValue}` : "-"}</span>
+                <span>{step.expectedResult || "-"}</span>
+                <span><StatusBadge status={step.status} /></span>
+                <span>{formatMs(step.durationMs)}</span>
+                <span>{step.message}</span>
+              </div>
+            ))
+          ) : (
+            <div className="step-result-empty">
+              <XCircle size={18} />
+              <span>No step detail was captured for this sample run.</span>
+            </div>
+          )}
+        </div>
       </section>
     );
   }
@@ -527,7 +628,17 @@ function App() {
   );
 }
 
-function RunTable({ runs, onExport }: { runs: RunRecord[]; onExport?: (run: RunRecord) => void }) {
+function RunTable({
+  runs,
+  selectedRunId,
+  onSelect,
+  onExport
+}: {
+  runs: RunRecord[];
+  selectedRunId?: string;
+  onSelect?: (run: RunRecord) => void;
+  onExport?: (run: RunRecord) => void;
+}) {
   return (
     <table>
       <thead>
@@ -535,8 +646,10 @@ function RunTable({ runs, onExport }: { runs: RunRecord[]; onExport?: (run: RunR
       </thead>
       <tbody>
         {runs.map((run) => (
-          <tr key={run.id}>
-            <td>{run.id}</td>
+          <tr key={run.id} className={run.id === selectedRunId ? "selected-row" : ""}>
+            <td>
+              {onSelect ? <button className="text-button" onClick={() => onSelect(run)}>{run.id}</button> : run.id}
+            </td>
             <td>{run.testTitle}</td>
             <td>{run.suiteName}</td>
             <td><StatusBadge status={run.status} /></td>
@@ -553,4 +666,3 @@ function RunTable({ runs, onExport }: { runs: RunRecord[]; onExport?: (run: RunR
 }
 
 export default App;
-
