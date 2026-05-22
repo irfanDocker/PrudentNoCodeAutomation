@@ -32,7 +32,7 @@ export const actionLabels: Record<(typeof actionTypes)[number], string> = {
   upload_file: "Upload file",
   download_file: "Download file",
   screenshot: "Screenshot",
-  get_page_title: "getPageTitle()",
+  get_page_title: "Get Page Title",
   is_disabled: "isDisabled",
   is_enabled: "isEnabled",
   string_contains: "String contains",
