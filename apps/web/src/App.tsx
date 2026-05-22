@@ -304,7 +304,7 @@ function dataRowsForDataSet(dataSet: DataSet | undefined): DataRow[] {
 }
 
 function dataColumnNames(dataSet: DataSet | undefined) {
-  return Array.from(new Set(dataRowsForDataSet(dataSet).flatMap((row) => Object.keys(row.variables)))).sort();
+  return Array.from(new Set(dataRowsForDataSet(dataSet).flatMap((row) => Object.keys(row.variables))));
 }
 
 function csvValue(value: string | boolean) {
