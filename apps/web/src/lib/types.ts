@@ -7,7 +7,17 @@ export type ActionType =
   | "wait"
   | "upload_file"
   | "download_file"
-  | "screenshot";
+  | "screenshot"
+  | "get_page_title"
+  | "is_disabled"
+  | "is_enabled"
+  | "string_contains"
+  | "select_by_value"
+  | "switch_to_frame"
+  | "database_connection"
+  | "api_call"
+  | "schema_validation"
+  | "json_validation";
 
 export type LocatorType = "css" | "xpath" | "text" | "role" | "label" | "placeholder";
 export type SuiteType = "SMOKE" | "REGRESSION" | "RELEASE" | "SPRINT" | "CUSTOM";

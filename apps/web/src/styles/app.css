@@ -461,6 +461,44 @@ label select {
   gap: 18px;
 }
 
+.recorder-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 18px;
+}
+
+.recorder-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.recorded-steps {
+  display: grid;
+  gap: 8px;
+}
+
+.recorded-step {
+  display: grid;
+  grid-template-columns: 34px minmax(120px, 0.8fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.recorded-step strong {
+  color: #176b65;
+}
+
+.recorded-step small {
+  color: #657384;
+  overflow-wrap: anywhere;
+}
+
 .suite-panel {
   display: grid;
   gap: 14px;
@@ -690,7 +728,8 @@ label select {
   }
 
   .metric-grid,
-  .suite-grid {
+  .suite-grid,
+  .recorder-layout {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 
@@ -746,7 +785,8 @@ label select {
   }
 
   .metric-grid,
-  .suite-grid {
+  .suite-grid,
+  .recorder-layout {
     grid-template-columns: 1fr;
   }
 

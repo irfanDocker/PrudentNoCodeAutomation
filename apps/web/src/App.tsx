@@ -8,6 +8,7 @@ import {
   FileText,
   Layers3,
   ListFilter,
+  Radio,
   Play,
   Plus,
   Save,
@@ -17,10 +18,10 @@ import {
   XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { actionTypes, initialRuns, initialSuites, initialTests, locatorTypes, suiteTypes } from "./lib/mockData";
+import { actionLabels, actionTypes, initialRuns, initialSuites, initialTests, locatorTypes, suiteTypes } from "./lib/mockData";
 import type { ActionType, LocatorType, RunRecord, SuiteType, TestCase, TestStep, TestSuite } from "./lib/types";
 
-type Page = "dashboard" | "tests" | "builder" | "suites" | "runs" | "debug" | "reports";
+type Page = "dashboard" | "tests" | "builder" | "recorder" | "suites" | "runs" | "debug" | "reports";
 
 const storageKeys = {
   tests: "prudent.tests",
@@ -34,6 +35,7 @@ const navItems: Array<{ id: Page; label: string; icon: typeof Activity }> = [
   { id: "dashboard", label: "Dashboard", icon: Activity },
   { id: "tests", label: "Tests", icon: ClipboardList },
   { id: "builder", label: "Builder", icon: Settings2 },
+  { id: "recorder", label: "Recorder", icon: Radio },
   { id: "suites", label: "Suites", icon: Layers3 },
   { id: "runs", label: "Runs", icon: Play },
   { id: "debug", label: "Debug", icon: Bug },
@@ -81,6 +83,18 @@ function emptyStep(stepNumber: number): TestStep {
   };
 }
 
+function emptyRecorderDraft(): Omit<TestStep, "id" | "stepNumber"> {
+  return {
+    actionType: "click",
+    locatorType: "css",
+    locatorValue: "",
+    inputValue: "",
+    expectedResult: "",
+    waitMs: "",
+    timeoutMs: 10000
+  };
+}
+
 function exportRun(run: RunRecord) {
   const header = ["run_id", "test_title", "suite", "status", "browser", "environment", "duration_ms", "error"];
   const row = [run.id, run.testTitle, run.suiteName, run.status, run.browser, run.environment, run.durationMs, run.error ?? ""];
@@ -115,6 +129,7 @@ function App() {
   const [browser, setBrowser] = useState<RunRecord["browser"]>("chromium");
   const [headless, setHeadless] = useState(true);
   const [runningTestId, setRunningTestId] = useState("");
+  const [recorderDraft, setRecorderDraft] = useState<Omit<TestStep, "id" | "stepNumber">>(() => emptyRecorderDraft());
 
   const selectedTest = tests.find((test) => test.id === selectedTestId) ?? tests[0];
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
@@ -219,6 +234,24 @@ function App() {
     if (selectedTestId === testId) {
       setSelectedTestId(tests.find((test) => test.id !== testId)?.id ?? "");
     }
+  }
+
+  function recordDraftStep() {
+    if (!selectedTest) return;
+
+    const step: TestStep = {
+      id: uid("step"),
+      stepNumber: selectedTest.steps.length + 1,
+      ...recorderDraft
+    };
+
+    updateSelectedTest({ steps: [...selectedTest.steps, step] });
+    setRecorderDraft((current) => ({
+      ...current,
+      locatorValue: "",
+      inputValue: "",
+      expectedResult: ""
+    }));
   }
 
   function createDemoRun(test: TestCase, forcedStatus?: RunRecord["status"], fallbackError?: string): RunRecord {
@@ -536,7 +569,7 @@ function App() {
             {selectedTest.steps.map((step) => (
               <div className="step-row" key={step.id}>
                 <strong>{step.stepNumber}</strong>
-                <select value={step.actionType} onChange={(event) => updateStep(step.id, { actionType: event.target.value as ActionType })}>{actionTypes.map((type) => <option key={type}>{type}</option>)}</select>
+                <select value={step.actionType} onChange={(event) => updateStep(step.id, { actionType: event.target.value as ActionType })}>{actionTypes.map((type) => <option key={type} value={type}>{actionLabels[type]}</option>)}</select>
                 <select value={step.locatorType} onChange={(event) => updateStep(step.id, { locatorType: event.target.value as LocatorType | "" })}>
                   <option value="">none</option>
                   {locatorTypes.map((type) => <option key={type}>{type}</option>)}
@@ -552,6 +585,62 @@ function App() {
           </div>
         </section>
       </>
+    );
+  }
+
+  function renderRecorder() {
+    if (!selectedTest) {
+      return <section className="panel"><button className="primary" onClick={createTest}><Plus size={18} /> New test</button></section>;
+    }
+
+    return (
+      <div className="recorder-layout">
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <h2>Record steps</h2>
+            </div>
+            <button className="primary" disabled={runningTestId === selectedTest.id} onClick={() => runTest(selectedTest)}>
+              <Play size={18} /> {runningTestId === selectedTest.id ? "Playing" : "Playback"}
+            </button>
+          </div>
+
+          <div className="form-grid">
+            <label>Test<input value={selectedTest.title} onChange={(event) => updateSelectedTest({ title: event.target.value })} /></label>
+            <label>Base URL<input value={selectedTest.baseUrl ?? ""} onChange={(event) => updateSelectedTest({ baseUrl: event.target.value })} /></label>
+            <label>Action<select value={recorderDraft.actionType} onChange={(event) => setRecorderDraft((current) => ({ ...current, actionType: event.target.value as ActionType }))}>{actionTypes.map((type) => <option key={type} value={type}>{actionLabels[type]}</option>)}</select></label>
+            <label>Locator type<select value={recorderDraft.locatorType} onChange={(event) => setRecorderDraft((current) => ({ ...current, locatorType: event.target.value as LocatorType | "" }))}>
+              <option value="">none</option>
+              {locatorTypes.map((type) => <option key={type}>{type}</option>)}
+            </select></label>
+            <label>Locator / frame / check target<input value={recorderDraft.locatorValue} onChange={(event) => setRecorderDraft((current) => ({ ...current, locatorValue: event.target.value }))} /></label>
+            <label>Input / URL / JSON / DB URL<input value={recorderDraft.inputValue} onChange={(event) => setRecorderDraft((current) => ({ ...current, inputValue: event.target.value }))} /></label>
+            <label>Expected / schema<input value={recorderDraft.expectedResult} onChange={(event) => setRecorderDraft((current) => ({ ...current, expectedResult: event.target.value }))} /></label>
+            <label>Timeout<input type="number" value={recorderDraft.timeoutMs} onChange={(event) => setRecorderDraft((current) => ({ ...current, timeoutMs: event.target.value ? Number(event.target.value) : "" }))} /></label>
+          </div>
+
+          <div className="recorder-actions">
+            <button className="primary" onClick={recordDraftStep}><Plus size={18} /> Record step</button>
+            <button className="secondary" onClick={() => setRecorderDraft(emptyRecorderDraft())}>Clear</button>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-title">
+            <h2>Recorded playback script</h2>
+            <span className="badge neutral">{selectedTest.steps.length} steps</span>
+          </div>
+          <div className="recorded-steps">
+            {selectedTest.steps.map((step) => (
+              <div className="recorded-step" key={step.id}>
+                <strong>{step.stepNumber}</strong>
+                <span>{actionLabels[step.actionType]}</span>
+                <small>{step.locatorType ? `${step.locatorType}: ${step.locatorValue}` : step.inputValue || step.expectedResult || "-"}</small>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     );
   }
 
@@ -739,6 +828,7 @@ function App() {
     if (page === "dashboard") return renderDashboard();
     if (page === "tests") return renderTestLibrary();
     if (page === "builder") return renderBuilder();
+    if (page === "recorder") return renderRecorder();
     if (page === "suites") return renderSuites();
     if (page === "runs") return renderRuns();
     if (page === "debug") return renderDebug();

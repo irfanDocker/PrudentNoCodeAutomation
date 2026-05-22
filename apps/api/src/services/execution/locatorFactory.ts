@@ -1,7 +1,18 @@
 import type { Locator, Page } from "playwright";
 import type { LocatorType, TestStepInput } from "@prudent/shared";
 
-const actionsWithoutLocator = new Set(["goto", "wait", "screenshot"]);
+const actionsWithoutLocator = new Set([
+  "goto",
+  "wait",
+  "screenshot",
+  "get_page_title",
+  "string_contains",
+  "switch_to_frame",
+  "database_connection",
+  "api_call",
+  "schema_validation",
+  "json_validation"
+]);
 
 function parseRole(value: string) {
   const [role, ...nameParts] = value.split(":");
@@ -44,4 +55,3 @@ export function resolveLocator(page: Page, step: TestStepInput): Locator | null 
       throw new Error(`Unsupported locator type: ${locatorType}`);
   }
 }
-

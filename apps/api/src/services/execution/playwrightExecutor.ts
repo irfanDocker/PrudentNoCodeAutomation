@@ -1,12 +1,12 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
-import { chromium, firefox, webkit, type Browser, type BrowserContext, type Locator, type Page } from "playwright";
+import { chromium, firefox, webkit, type Browser, type BrowserContext, type Page } from "playwright";
 import type { BrowserType, RunOptions, RunStatus, TestStepInput } from "@prudent/shared";
 import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
-import { resolveLocator } from "./locatorFactory.js";
 import { writeHtmlReport } from "../reporting/htmlReport.js";
+import { createExecutionState, executeStepAction } from "./actionUtilities.js";
 
 interface TestCaseForExecution {
   id: string;
@@ -33,32 +33,6 @@ function nowMs() {
 
 function durationFrom(startedAt: number) {
   return Date.now() - startedAt;
-}
-
-function normalizeBaseUrl(baseUrl: string | null | undefined) {
-  if (!baseUrl) {
-    return "";
-  }
-
-  return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-}
-
-function resolveNavigationUrl(baseUrl: string | null | undefined, inputValue: string | null | undefined) {
-  const target = inputValue?.trim();
-  if (!target) {
-    throw new Error("goto step requires input value with a URL or path");
-  }
-
-  if (/^https?:\/\//i.test(target)) {
-    return target;
-  }
-
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
-  if (!normalizedBaseUrl) {
-    throw new Error("Relative goto step requires a project base URL or run base URL");
-  }
-
-  return `${normalizedBaseUrl}${target.startsWith("/") ? target : `/${target}`}`;
 }
 
 async function launchBrowser(browserType: BrowserType, headless: boolean): Promise<Browser> {
@@ -109,77 +83,6 @@ async function attachScreenshot(runId: string, stepResultId: string, page: Page,
   return screenshotPath;
 }
 
-async function expectText(page: Page, step: TestStepInput, locator: Locator | null, timeoutMs: number) {
-  const expected = step.expectedResult || step.inputValue || step.locatorValue;
-
-  if (!expected) {
-    throw new Error(`Step ${step.stepNumber} verify_text requires expected result or input value`);
-  }
-
-  if (locator) {
-    await locator.waitFor({ state: "visible", timeout: timeoutMs });
-    const text = (await locator.textContent({ timeout: timeoutMs })) ?? "";
-    if (!text.includes(expected)) {
-      throw new Error(`Expected locator text to include "${expected}", received "${text}"`);
-    }
-    return;
-  }
-
-  await page.getByText(expected, { exact: false }).waitFor({ state: "visible", timeout: timeoutMs });
-}
-
-async function runStep(page: Page, context: BrowserContext, step: TestStepInput, locator: Locator | null, runDir: string, options: RunOptions) {
-  const timeoutMs = step.timeoutMs ?? options.timeoutMs ?? 10000;
-
-  switch (step.actionType) {
-    case "goto":
-      await page.goto(resolveNavigationUrl(options.baseUrl, step.inputValue ?? step.locatorValue), {
-        waitUntil: "domcontentloaded",
-        timeout: timeoutMs
-      });
-      return "Navigation completed";
-    case "click":
-      await locator?.click({ timeout: timeoutMs });
-      return "Clicked element";
-    case "type":
-      await locator?.fill(step.inputValue ?? "", { timeout: timeoutMs });
-      return "Text entered";
-    case "select":
-      await locator?.selectOption(step.inputValue ?? "", { timeout: timeoutMs });
-      return "Option selected";
-    case "verify_text":
-      await expectText(page, step, locator, timeoutMs);
-      return "Text verified";
-    case "wait":
-      await page.waitForTimeout(step.waitMs ?? Number(step.inputValue ?? 1000));
-      return "Wait completed";
-    case "upload_file":
-      if (!step.inputValue) {
-        throw new Error("upload_file requires input value with a file path");
-      }
-      await locator?.setInputFiles(step.inputValue, { timeout: timeoutMs });
-      return "File uploaded";
-    case "download_file": {
-      const downloadDir = path.join(runDir, "downloads");
-      await fs.ensureDir(downloadDir);
-      const [download] = await Promise.all([
-        page.waitForEvent("download", { timeout: timeoutMs }),
-        locator?.click({ timeout: timeoutMs })
-      ]);
-      const fileName = download.suggestedFilename();
-      await download.saveAs(path.join(downloadDir, fileName));
-      return `Downloaded ${fileName}`;
-    }
-    case "screenshot": {
-      const screenshotPath = path.join(runDir, `step-${step.stepNumber}.png`);
-      await page.screenshot({ path: screenshotPath, fullPage: true });
-      return `Screenshot saved to ${screenshotPath}`;
-    }
-    default:
-      throw new Error(`Unsupported action type: ${step.actionType}`);
-  }
-}
-
 export async function executeTestCaseRun(
   runId: string,
   testCase: TestCaseForExecution,
@@ -224,6 +127,7 @@ export async function executeTestCaseRun(
     }
 
     const page = await context.newPage();
+    const actionState = createExecutionState();
 
     for (const step of testCase.steps.sort((a, b) => a.stepNumber - b.stepNumber)) {
       const stepStartedAt = nowMs();
@@ -242,8 +146,7 @@ export async function executeTestCaseRun(
 
       try {
         await log(runId, `Step ${step.stepNumber}: ${step.actionType}`, "info", stepResult.id);
-        const locator = resolveLocator(page, step);
-        const message = await runStep(page, context, step, locator, runDir, resolvedOptions);
+        const message = await executeStepAction(page, actionState, step, runDir, resolvedOptions);
         const screenshotPath = resolvedOptions.screenshots
           ? await attachScreenshot(runId, stepResult.id, page, runDir, step.stepNumber, "passed").catch(async (error) => {
               await log(

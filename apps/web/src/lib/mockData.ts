@@ -9,8 +9,40 @@ export const actionTypes = [
   "wait",
   "upload_file",
   "download_file",
-  "screenshot"
+  "screenshot",
+  "get_page_title",
+  "is_disabled",
+  "is_enabled",
+  "string_contains",
+  "select_by_value",
+  "switch_to_frame",
+  "database_connection",
+  "api_call",
+  "schema_validation",
+  "json_validation"
 ] as const;
+
+export const actionLabels: Record<(typeof actionTypes)[number], string> = {
+  goto: "Go to URL",
+  click: "Click",
+  type: "Type",
+  select: "Select option",
+  verify_text: "Verify text",
+  wait: "Wait",
+  upload_file: "Upload file",
+  download_file: "Download file",
+  screenshot: "Screenshot",
+  get_page_title: "getPageTitle()",
+  is_disabled: "isDisabled",
+  is_enabled: "isEnabled",
+  string_contains: "String contains",
+  select_by_value: "Select by value",
+  switch_to_frame: "Switch to frame",
+  database_connection: "Database connection",
+  api_call: "API call",
+  schema_validation: "Schema validation",
+  json_validation: "JSON validation"
+};
 
 export const locatorTypes = ["css", "xpath", "text", "role", "label", "placeholder"] as const;
 export const suiteTypes = ["SMOKE", "REGRESSION", "RELEASE", "SPRINT", "CUSTOM"] as const;

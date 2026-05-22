@@ -51,6 +51,7 @@ npm --workspace apps/api run cli -- run-test --test-case-id TEST_CASE_ID --brows
 - Full architecture: [docs/architecture.md](docs/architecture.md)
 - Database schema: [docs/database-schema.sql](docs/database-schema.sql)
 - API endpoints: [docs/api.md](docs/api.md)
+- No-code action catalog: [docs/action-catalog.md](docs/action-catalog.md)
 - CI/CD examples: [docs/ci-cd.md](docs/ci-cd.md)
 - Implementation roadmap: [docs/roadmap.md](docs/roadmap.md)
 
@@ -67,4 +68,3 @@ The current implementation focuses on a production-shaped MVP:
 - CLI and API triggers that return CI-friendly process exit codes
 
 Future enhancements are documented in the roadmap.
-

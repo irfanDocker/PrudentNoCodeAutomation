@@ -9,7 +9,17 @@ export const actionTypes = [
   "wait",
   "upload_file",
   "download_file",
-  "screenshot"
+  "screenshot",
+  "get_page_title",
+  "is_disabled",
+  "is_enabled",
+  "string_contains",
+  "select_by_value",
+  "switch_to_frame",
+  "database_connection",
+  "api_call",
+  "schema_validation",
+  "json_validation"
 ] as const;
 
 export const locatorTypes = ["css", "xpath", "text", "role", "label", "placeholder"] as const;
@@ -115,4 +125,3 @@ export function normalizeTags(value: string | string[] | null | undefined): stri
     .map((item) => item.trim())
     .filter(Boolean);
 }
-
