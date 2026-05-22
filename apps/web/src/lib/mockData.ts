@@ -1,4 +1,4 @@
-import type { DataSet, EnvironmentConfig, RunRecord, ScenarioData, TestCase, TestSuite, UtilityBlock } from "./types";
+import type { DataSet, EnvironmentConfig, JenkinsConfig, RunRecord, ScenarioData, ScheduleConfig, TestCase, TestSuite, UtilityBlock } from "./types";
 
 export const actionTypes = [
   "goto",
@@ -200,20 +200,53 @@ export const initialEnvironments: EnvironmentConfig[] = [
 export const initialDataSets: DataSet[] = [
   {
     id: "data-valid-user",
-    name: "Valid portal user",
-    variables: {
-      email: "qa@example.com",
-      password: "Password123!",
-      phone: "5551234567"
-    }
+    name: "Portal users",
+    rows: [
+      {
+        id: "row-valid-user",
+        name: "Valid user",
+        enabled: true,
+        variables: {
+          email: "qa@example.com",
+          password: "Password123!",
+          phone: "5551234567"
+        }
+      },
+      {
+        id: "row-manager-user",
+        name: "Manager user",
+        enabled: true,
+        variables: {
+          email: "manager@example.com",
+          password: "Password123!",
+          phone: "5559876543"
+        }
+      }
+    ]
   },
   {
     id: "data-invalid-phone",
     name: "Invalid phone profile",
-    variables: {
-      email: "qa@example.com",
-      phone: "123"
-    }
+    rows: [
+      {
+        id: "row-short-phone",
+        name: "Short phone",
+        enabled: true,
+        variables: {
+          email: "qa@example.com",
+          phone: "123"
+        }
+      },
+      {
+        id: "row-alpha-phone",
+        name: "Alpha phone",
+        enabled: true,
+        variables: {
+          email: "qa@example.com",
+          phone: "abc-phone"
+        }
+      }
+    ]
   }
 ];
 
@@ -270,6 +303,27 @@ export const initialUtilities: UtilityBlock[] = [
         timeoutMs: 10000
       }
     ]
+  }
+];
+
+export const initialJenkinsConfig: JenkinsConfig = {
+  url: "https://jenkins.example.com",
+  jobName: "Prudent-NoCode-Smoke",
+  token: "",
+  branch: "main"
+};
+
+export const initialSchedules: ScheduleConfig[] = [
+  {
+    id: "schedule-smoke-daily",
+    name: "Daily smoke",
+    testCaseId: "tc-login-001",
+    environmentId: "env-qa",
+    dataSetId: "data-valid-user",
+    cadence: "Daily",
+    time: "08:00",
+    enabled: true,
+    nextRun: "2026-05-23T08:00:00.000Z"
   }
 ];
 

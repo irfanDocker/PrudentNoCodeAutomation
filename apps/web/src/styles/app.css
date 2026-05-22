@@ -339,6 +339,8 @@ th {
 }
 
 .badge.skipped,
+.badge.queued,
+.badge.running,
 .badge.draft {
   background: #fff0cc;
   color: #7a5200;
@@ -561,6 +563,21 @@ label textarea {
   padding: 12px;
 }
 
+.data-row-list {
+  display: grid;
+  gap: 10px;
+}
+
+.data-row-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid #e7ecf2;
+  border-radius: 8px;
+  padding: 10px;
+}
+
 .utility-card {
   align-content: start;
 }
@@ -674,6 +691,18 @@ label textarea {
   color: #657384;
 }
 
+.step-summary-grid,
+.run-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.step-summary-grid {
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+}
+
 .run-mode {
   min-width: 150px;
   border: 1px solid #dde3ea;
@@ -771,6 +800,33 @@ label textarea {
   padding: 8px 0;
 }
 
+.step-result-row.passed {
+  background: #f7fcfa;
+}
+
+.step-result-row.failed {
+  background: #fff8f7;
+}
+
+.step-result-row.skipped {
+  background: #fffaf0;
+}
+
+.schedule-list {
+  display: grid;
+  gap: 10px;
+}
+
+.schedule-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) 120px 110px 100px auto 44px;
+  gap: 10px;
+  align-items: end;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+}
+
 .step-result-empty {
   display: flex;
   align-items: center;
@@ -821,7 +877,9 @@ label textarea {
   .metric-grid,
   .suite-grid,
   .recorder-layout,
-  .config-layout {
+  .config-layout,
+  .run-control-grid,
+  .step-summary-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 
@@ -832,6 +890,10 @@ label textarea {
   }
 
   .step-fields {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .schedule-row {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 
@@ -883,12 +945,16 @@ label textarea {
   .metric-grid,
   .suite-grid,
   .recorder-layout,
-  .config-layout {
+  .config-layout,
+  .run-control-grid,
+  .step-summary-grid {
     grid-template-columns: 1fr;
   }
 
   .step-row,
-  .step-fields {
+  .step-fields,
+  .data-row-card,
+  .schedule-row {
     grid-template-columns: 1fr;
   }
 

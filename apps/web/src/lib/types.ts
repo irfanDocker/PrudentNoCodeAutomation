@@ -67,6 +67,14 @@ export interface EnvironmentConfig {
 export interface DataSet {
   id: string;
   name: string;
+  variables?: Record<string, string>;
+  rows: DataRow[];
+}
+
+export interface DataRow {
+  id: string;
+  name: string;
+  enabled: boolean;
   variables: Record<string, string>;
 }
 
@@ -95,12 +103,35 @@ export interface RunRecord {
   environment: string;
   durationMs: number;
   startedAt: string;
+  triggerSource?: "UI" | "DATA_DRIVEN" | "JENKINS" | "SCHEDULED";
+  dataSetName?: string;
+  dataRowName?: string;
+  jenkinsBuild?: string;
   stepResults?: RunStepResult[];
   failedStepId?: string;
   error?: string;
   screenshot?: string;
   trace?: string;
   video?: string;
+}
+
+export interface JenkinsConfig {
+  url: string;
+  jobName: string;
+  token: string;
+  branch: string;
+}
+
+export interface ScheduleConfig {
+  id: string;
+  name: string;
+  testCaseId: string;
+  environmentId: string;
+  dataSetId: string;
+  cadence: "Hourly" | "Daily" | "Weekly";
+  time: string;
+  enabled: boolean;
+  nextRun: string;
 }
 
 export interface RunStepResult {

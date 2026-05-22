@@ -9,6 +9,7 @@ import {
   FileText,
   Layers3,
   ListFilter,
+  PlugZap,
   Radio,
   Play,
   Plus,
@@ -24,7 +25,9 @@ import {
   actionTypes,
   initialDataSets,
   initialEnvironments,
+  initialJenkinsConfig,
   initialRuns,
+  initialSchedules,
   initialScenarioData,
   initialSuites,
   initialTests,
@@ -35,9 +38,12 @@ import {
 import type {
   ActionType,
   DataSet,
+  DataRow,
   EnvironmentConfig,
+  JenkinsConfig,
   LocatorType,
   RunRecord,
+  ScheduleConfig,
   ScenarioData,
   SuiteType,
   TestCase,
@@ -46,7 +52,7 @@ import type {
   UtilityBlock
 } from "./lib/types";
 
-type Page = "dashboard" | "tests" | "builder" | "recorder" | "config" | "suites" | "runs" | "debug" | "reports";
+type Page = "dashboard" | "tests" | "builder" | "recorder" | "environments" | "testdata" | "utilities" | "suites" | "runs" | "debug" | "reports";
 type ActionField = "locatorType" | "locatorValue" | "inputValue" | "expectedResult" | "waitMs";
 
 interface ActionFieldConfig {
@@ -64,7 +70,9 @@ const storageKeys = {
   environments: "prudent.environments",
   dataSets: "prudent.dataSets",
   scenarioData: "prudent.scenarioData",
-  utilities: "prudent.utilities"
+  utilities: "prudent.utilities",
+  jenkinsConfig: "prudent.jenkinsConfig",
+  schedules: "prudent.schedules"
 };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
@@ -74,7 +82,9 @@ const navItems: Array<{ id: Page; label: string; icon: typeof Activity }> = [
   { id: "tests", label: "Tests", icon: ClipboardList },
   { id: "builder", label: "Builder", icon: Settings2 },
   { id: "recorder", label: "Recorder", icon: Radio },
-  { id: "config", label: "Config", icon: Database },
+  { id: "environments", label: "Environments", icon: Database },
+  { id: "testdata", label: "Test Data", icon: FileText },
+  { id: "utilities", label: "Utilities", icon: PlugZap },
   { id: "suites", label: "Suites", icon: Layers3 },
   { id: "runs", label: "Runs", icon: Play },
   { id: "debug", label: "Debug", icon: Bug },
@@ -256,6 +266,15 @@ function applyTokensToStep(step: TestStep, variables: Record<string, string>): T
   };
 }
 
+function dataRowsForDataSet(dataSet: DataSet | undefined): DataRow[] {
+  if (!dataSet) return [];
+  if (dataSet.rows?.length) return dataSet.rows;
+  if (dataSet.variables && Object.keys(dataSet.variables).length) {
+    return [{ id: `${dataSet.id}-row`, name: dataSet.name, enabled: true, variables: dataSet.variables }];
+  }
+  return [];
+}
+
 function emptyStep(stepNumber: number): TestStep {
   return {
     id: uid("step"),
@@ -313,13 +332,17 @@ function App() {
   const [dataSets, setDataSets] = useState<DataSet[]>(() => readStored(storageKeys.dataSets, initialDataSets));
   const [scenarioData, setScenarioData] = useState<ScenarioData[]>(() => readStored(storageKeys.scenarioData, initialScenarioData));
   const [utilities, setUtilities] = useState<UtilityBlock[]>(() => readStored(storageKeys.utilities, initialUtilities));
+  const [jenkinsConfig, setJenkinsConfig] = useState<JenkinsConfig>(() => readStored(storageKeys.jenkinsConfig, initialJenkinsConfig));
+  const [schedules, setSchedules] = useState<ScheduleConfig[]>(() => readStored(storageKeys.schedules, initialSchedules));
   const [selectedTestId, setSelectedTestId] = useState(() => readStored(storageKeys.tests, initialTests)[0]?.id ?? "");
   const [selectedRunId, setSelectedRunId] = useState(() => readStored(storageKeys.runs, initialRuns)[0]?.id ?? "");
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(() => readStored(storageKeys.environments, initialEnvironments)[0]?.id ?? "");
   const [selectedDataSetId, setSelectedDataSetId] = useState(() => readStored(storageKeys.dataSets, initialDataSets)[0]?.id ?? "");
+  const [selectedDataRowId, setSelectedDataRowId] = useState("");
   const [selectedScenarioId, setSelectedScenarioId] = useState(() => readStored(storageKeys.scenarioData, initialScenarioData)[0]?.id ?? "");
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<SuiteType | "ALL">("ALL");
+  const [dataRunMode, setDataRunMode] = useState<"single" | "all">("single");
   const [browser, setBrowser] = useState<RunRecord["browser"]>("chromium");
   const [headless, setHeadless] = useState(true);
   const [runningTestId, setRunningTestId] = useState("");
@@ -330,6 +353,8 @@ function App() {
   const selectedEnvironment = environments.find((environment) => environment.id === selectedEnvironmentId) ?? environments[0];
   const selectedDataSet = dataSets.find((dataSet) => dataSet.id === selectedDataSetId) ?? dataSets[0];
   const selectedScenario = scenarioData.find((scenario) => scenario.id === selectedScenarioId) ?? scenarioData[0];
+  const selectedDataRows = dataRowsForDataSet(selectedDataSet);
+  const selectedDataRow = selectedDataRows.find((row) => row.id === selectedDataRowId) ?? selectedDataRows[0];
 
   useEffect(() => {
     window.localStorage.setItem(storageKeys.tests, JSON.stringify(tests));
@@ -359,6 +384,20 @@ function App() {
     window.localStorage.setItem(storageKeys.utilities, JSON.stringify(utilities));
   }, [utilities]);
 
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.jenkinsConfig, JSON.stringify(jenkinsConfig));
+  }, [jenkinsConfig]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.schedules, JSON.stringify(schedules));
+  }, [schedules]);
+
+  useEffect(() => {
+    if (selectedDataRows.length && !selectedDataRows.some((row) => row.id === selectedDataRowId)) {
+      setSelectedDataRowId(selectedDataRows[0].id);
+    }
+  }, [selectedDataRowId, selectedDataRows]);
+
   const filteredTests = useMemo(() => {
     return tests.filter((test) => {
       const matchesSearch =
@@ -375,7 +414,7 @@ function App() {
   const failedRuns = runs.filter((run) => run.status === "FAILED").length;
   const skippedRuns = runs.filter((run) => run.status === "SKIPPED").length;
 
-  function activeRunVariables() {
+  function activeRunVariables(dataRow = selectedDataRow) {
     return {
       ...(selectedEnvironment?.variables ?? {}),
       baseUrl: selectedEnvironment?.baseUrl ?? "",
@@ -383,12 +422,13 @@ function App() {
       dbUrl: selectedEnvironment?.dbUrl ?? "",
       environment: selectedEnvironment?.name ?? "",
       ...(selectedDataSet?.variables ?? {}),
+      ...(dataRow?.variables ?? {}),
       ...(selectedScenario?.variables ?? {})
     };
   }
 
-  function executableTest(test: TestCase) {
-    const variables = activeRunVariables();
+  function executableTest(test: TestCase, dataRow = selectedDataRow) {
+    const variables = activeRunVariables(dataRow);
     const baseUrl = selectedEnvironment?.baseUrl || test.baseUrl || "";
 
     return {
@@ -509,7 +549,7 @@ function App() {
       steps: cloneStepsForInsert(selectedTest.steps, 1)
     };
     setUtilities((current) => [utility, ...current]);
-    setPage("config");
+    setPage("utilities");
   }
 
   function updateUtilityFromSelectedTest(utilityId: string) {
@@ -537,9 +577,42 @@ function App() {
   }
 
   function addDataSet() {
-    const dataSet: DataSet = { id: uid("data"), name: "New data set", variables: {} };
+    const dataSet: DataSet = {
+      id: uid("data"),
+      name: "New data set",
+      rows: [{ id: uid("row"), name: "Row 1", enabled: true, variables: {} }]
+    };
     setDataSets((current) => [dataSet, ...current]);
     setSelectedDataSetId(dataSet.id);
+    setSelectedDataRowId(dataSet.rows[0].id);
+  }
+
+  function addDataRow(dataSetId: string) {
+    const row: DataRow = { id: uid("row"), name: "New row", enabled: true, variables: {} };
+    setDataSets((current) =>
+      current.map((dataSet) => dataSet.id === dataSetId ? { ...dataSet, rows: [...dataRowsForDataSet(dataSet), row] } : dataSet)
+    );
+    setSelectedDataRowId(row.id);
+  }
+
+  function updateDataRow(dataSetId: string, rowId: string, patch: Partial<DataRow>) {
+    setDataSets((current) =>
+      current.map((dataSet) =>
+        dataSet.id === dataSetId
+          ? { ...dataSet, rows: dataRowsForDataSet(dataSet).map((row) => row.id === rowId ? { ...row, ...patch } : row), variables: undefined }
+          : dataSet
+      )
+    );
+  }
+
+  function deleteDataRow(dataSetId: string, rowId: string) {
+    setDataSets((current) =>
+      current.map((dataSet) =>
+        dataSet.id === dataSetId
+          ? { ...dataSet, rows: dataRowsForDataSet(dataSet).filter((row) => row.id !== rowId), variables: undefined }
+          : dataSet
+      )
+    );
   }
 
   function addScenarioData() {
@@ -735,19 +808,9 @@ function App() {
     };
   }
 
-  async function runTest(test: TestCase, forcedStatus?: RunRecord["status"]) {
-    if (runningTestId) return;
-    const configuredTest = executableTest(test);
-
-    if (forcedStatus) {
-      const demoRun = createDemoRun(configuredTest, forcedStatus);
-      setRuns((current) => [demoRun, ...current]);
-      setSelectedRunId(demoRun.id);
-      setPage(demoRun.status === "FAILED" ? "debug" : "runs");
-      return;
-    }
-
-    setRunningTestId(test.id);
+  async function executeSingleRun(test: TestCase, dataRow: DataRow | undefined, triggerSource: RunRecord["triggerSource"]) {
+    const configuredTest = executableTest(test, dataRow);
+    const testTitle = triggerSource === "DATA_DRIVEN" && dataRow ? `${configuredTest.title} [${dataRow.name}]` : configuredTest.title;
 
     try {
       const response = await fetch(`${apiBaseUrl}/api/local-runs`, {
@@ -755,7 +818,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           testCase: {
-            title: configuredTest.title,
+            title: testTitle,
             baseUrl: configuredTest.baseUrl || "",
             steps: configuredTest.steps.map((step) => ({
               id: step.id,
@@ -790,7 +853,7 @@ function App() {
       const run: RunRecord = {
         id: result.id,
         testCaseId: configuredTest.id,
-        testTitle: configuredTest.title,
+        testTitle,
         suiteName: configuredTest.groupType === "CUSTOM" ? "Custom Test Suite" : `${configuredTest.groupType[0]}${configuredTest.groupType.slice(1).toLowerCase()} Test`,
         status: result.status,
         executionMode: "LOCAL_PLAYWRIGHT",
@@ -798,6 +861,9 @@ function App() {
         environment: selectedEnvironment?.name ?? result.environment,
         durationMs: result.durationMs,
         startedAt: result.startedAt,
+        triggerSource,
+        dataSetName: selectedDataSet?.name,
+        dataRowName: dataRow?.name,
         stepResults: result.stepResults.map(
           (step: {
             stepId?: string;
@@ -831,18 +897,61 @@ function App() {
         video: result.video
       };
 
-      setRuns((current) => [run, ...current]);
-      setSelectedRunId(run.id);
-      setPage(run.status === "FAILED" ? "debug" : "runs");
+      return run;
     } catch (error) {
       const fallbackRun = createDemoRun(
-        configuredTest,
+        { ...configuredTest, title: testTitle },
         "FAILED",
         `Local Playwright could not run. ${error instanceof Error ? error.message : ""}`
       );
-      setRuns((current) => [fallbackRun, ...current]);
-      setSelectedRunId(fallbackRun.id);
-      setPage(fallbackRun.status === "FAILED" ? "debug" : "runs");
+      return {
+        ...fallbackRun,
+        environment: selectedEnvironment?.name ?? fallbackRun.environment,
+        triggerSource,
+        dataSetName: selectedDataSet?.name,
+        dataRowName: dataRow?.name
+      };
+    }
+  }
+
+  async function runTest(test: TestCase, forcedStatus?: RunRecord["status"]) {
+    if (runningTestId) return;
+
+    const enabledRows = selectedDataRows.filter((row) => row.enabled);
+    const rows =
+      dataRunMode === "all" && !forcedStatus
+        ? enabledRows.length ? enabledRows : selectedDataRows
+        : selectedDataRow ? [selectedDataRow] : [];
+    const runRows = rows.length ? rows : [undefined];
+
+    if (forcedStatus) {
+      const configuredTest = executableTest(test, runRows[0]);
+      const demoRun = {
+        ...createDemoRun(configuredTest, forcedStatus),
+        environment: selectedEnvironment?.name ?? "qa",
+        triggerSource: "UI" as const,
+        dataSetName: selectedDataSet?.name,
+        dataRowName: runRows[0]?.name
+      };
+      setRuns((current) => [demoRun, ...current]);
+      setSelectedRunId(demoRun.id);
+      setPage(demoRun.status === "FAILED" ? "debug" : "runs");
+      return;
+    }
+
+    setRunningTestId(test.id);
+
+    try {
+      const completedRuns: RunRecord[] = [];
+      const triggerSource = dataRunMode === "all" ? "DATA_DRIVEN" : "UI";
+
+      for (const row of runRows) {
+        completedRuns.push(await executeSingleRun(test, row, triggerSource));
+      }
+
+      setRuns((current) => [...completedRuns, ...current]);
+      setSelectedRunId(completedRuns[0]?.id ?? selectedRunId);
+      setPage(completedRuns.some((run) => run.status === "FAILED") ? "debug" : "runs");
     } finally {
       setRunningTestId("");
     }
@@ -859,6 +968,81 @@ function App() {
         };
       })
     );
+  }
+
+  function queueRun(triggerSource: RunRecord["triggerSource"], label: string, jenkinsBuild?: string) {
+    if (!selectedTest) return;
+
+    const run: RunRecord = {
+      id: uid("run"),
+      testCaseId: selectedTest.id,
+      testTitle: `${selectedTest.title} · ${label}`,
+      suiteName: selectedTest.groupType === "CUSTOM" ? "Custom Test Suite" : `${selectedTest.groupType[0]}${selectedTest.groupType.slice(1).toLowerCase()} Test`,
+      status: "QUEUED",
+      executionMode: "PLAYWRIGHT_API",
+      browser,
+      environment: selectedEnvironment?.name ?? "qa",
+      durationMs: 0,
+      startedAt: new Date().toISOString(),
+      triggerSource,
+      dataSetName: selectedDataSet?.name,
+      dataRowName: dataRunMode === "all" ? "All enabled rows" : selectedDataRow?.name,
+      jenkinsBuild
+    };
+
+    setRuns((current) => [run, ...current]);
+    setSelectedRunId(run.id);
+  }
+
+  function triggerJenkinsBuild() {
+    const buildUrl = `${jenkinsConfig.url.replace(/\/$/, "")}/job/${encodeURIComponent(jenkinsConfig.jobName)}/buildWithParameters?BRANCH=${encodeURIComponent(jenkinsConfig.branch)}&TEST_CASE_ID=${encodeURIComponent(selectedTest?.id ?? "")}&ENVIRONMENT=${encodeURIComponent(selectedEnvironment?.name ?? "")}`;
+    queueRun("JENKINS", "Jenkins build queued", buildUrl);
+  }
+
+  function addSchedule() {
+    if (!selectedTest || !selectedEnvironment || !selectedDataSet) return;
+    const schedule: ScheduleConfig = {
+      id: uid("schedule"),
+      name: `${selectedTest.title} schedule`,
+      testCaseId: selectedTest.id,
+      environmentId: selectedEnvironment.id,
+      dataSetId: selectedDataSet.id,
+      cadence: "Daily",
+      time: "08:00",
+      enabled: true,
+      nextRun: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    };
+    setSchedules((current) => [schedule, ...current]);
+  }
+
+  function updateSchedule(scheduleId: string, patch: Partial<ScheduleConfig>) {
+    setSchedules((current) => current.map((schedule) => schedule.id === scheduleId ? { ...schedule, ...patch } : schedule));
+  }
+
+  function queueSchedule(schedule: ScheduleConfig) {
+    const test = tests.find((item) => item.id === schedule.testCaseId);
+    const environment = environments.find((item) => item.id === schedule.environmentId);
+    const dataSet = dataSets.find((item) => item.id === schedule.dataSetId);
+    if (!test) return;
+
+    const run: RunRecord = {
+      id: uid("run"),
+      testCaseId: test.id,
+      testTitle: `${test.title} · ${schedule.name}`,
+      suiteName: test.groupType === "CUSTOM" ? "Custom Test Suite" : `${test.groupType[0]}${test.groupType.slice(1).toLowerCase()} Test`,
+      status: "QUEUED",
+      executionMode: "PLAYWRIGHT_API",
+      browser,
+      environment: environment?.name ?? "qa",
+      durationMs: 0,
+      startedAt: new Date().toISOString(),
+      triggerSource: "SCHEDULED",
+      dataSetName: dataSet?.name,
+      dataRowName: "Scheduled run"
+    };
+
+    setRuns((current) => [run, ...current]);
+    setSelectedRunId(run.id);
   }
 
   function renderDashboard() {
@@ -990,6 +1174,13 @@ function App() {
             <label>Test data<select value={selectedDataSetId} onChange={(event) => setSelectedDataSetId(event.target.value)}>
               {dataSets.map((dataSet) => <option key={dataSet.id} value={dataSet.id}>{dataSet.name}</option>)}
             </select></label>
+            <label>Data row<select value={selectedDataRow?.id ?? ""} onChange={(event) => setSelectedDataRowId(event.target.value)} disabled={dataRunMode === "all"}>
+              {selectedDataRows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+            </select></label>
+            <label>Loop<select value={dataRunMode} onChange={(event) => setDataRunMode(event.target.value as "single" | "all")}>
+              <option value="single">Single data row</option>
+              <option value="all">All enabled rows</option>
+            </select></label>
             <label>Scenario<select value={selectedScenarioId} onChange={(event) => setSelectedScenarioId(event.target.value)}>
               {scenarioData.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
             </select></label>
@@ -1101,7 +1292,7 @@ function App() {
     );
   }
 
-  function renderConfig() {
+  function renderEnvironments() {
     return (
       <div className="config-layout">
         <section className="panel config-panel">
@@ -1127,7 +1318,13 @@ function App() {
             ))}
           </div>
         </section>
+      </div>
+    );
+  }
 
+  function renderTestData() {
+    return (
+      <div className="config-layout">
         <section className="panel config-panel">
           <div className="panel-title">
             <h2>Test data</h2>
@@ -1138,10 +1335,22 @@ function App() {
               <div className="config-card" key={dataSet.id}>
                 <div className="form-grid">
                   <label>Name<input value={dataSet.name} onChange={(event) => setDataSets((current) => current.map((item) => item.id === dataSet.id ? { ...item, name: event.target.value } : item))} /></label>
-                  {renderVariablesField(dataSet.variables, (variables) => setDataSets((current) => current.map((item) => item.id === dataSet.id ? { ...item, variables } : item)))}
+                </div>
+                <div className="data-row-list">
+                  {dataRowsForDataSet(dataSet).map((row) => (
+                    <div className="data-row-card" key={row.id}>
+                      <div className="form-grid">
+                        <label>Row name<input value={row.name} onChange={(event) => updateDataRow(dataSet.id, row.id, { name: event.target.value })} /></label>
+                        <label className="check"><input type="checkbox" checked={row.enabled} onChange={(event) => updateDataRow(dataSet.id, row.id, { enabled: event.target.checked })} /> Enabled</label>
+                        {renderVariablesField(row.variables, (variables) => updateDataRow(dataSet.id, row.id, { variables }), "Row variables (key=value)")}
+                      </div>
+                      <button className="icon-button danger-icon" title="Delete data row" onClick={() => deleteDataRow(dataSet.id, row.id)}><Trash2 size={16} /></button>
+                    </div>
+                  ))}
                 </div>
                 <div className="config-actions">
                   <button className="secondary" onClick={() => setSelectedDataSetId(dataSet.id)}>Use</button>
+                  <button className="secondary" onClick={() => addDataRow(dataSet.id)}><Plus size={18} /> Add row</button>
                   <button className="icon-button danger-icon" title="Delete data set" onClick={() => deleteDataSet(dataSet.id)}><Trash2 size={16} /></button>
                 </div>
               </div>
@@ -1169,7 +1378,13 @@ function App() {
             ))}
           </div>
         </section>
+      </div>
+    );
+  }
 
+  function renderUtilities() {
+    return (
+      <div className="config-layout">
         <section className="panel config-panel">
           <div className="panel-title">
             <h2>Reusable utilities</h2>
@@ -1235,6 +1450,44 @@ function App() {
     return (
       <>
         {selectedRun && renderRunDetail(selectedRun)}
+        <div className="run-control-grid">
+          <section className="panel">
+            <div className="panel-title">
+              <h2>Jenkins build</h2>
+              <button className="primary" onClick={triggerJenkinsBuild}><Play size={18} /> Queue build</button>
+            </div>
+            <div className="form-grid">
+              <label>Jenkins URL<input value={jenkinsConfig.url} onChange={(event) => setJenkinsConfig((current) => ({ ...current, url: event.target.value }))} /></label>
+              <label>Job name<input value={jenkinsConfig.jobName} onChange={(event) => setJenkinsConfig((current) => ({ ...current, jobName: event.target.value }))} /></label>
+              <label>Branch<input value={jenkinsConfig.branch} onChange={(event) => setJenkinsConfig((current) => ({ ...current, branch: event.target.value }))} /></label>
+              <label className="wide-field">Token<input value={jenkinsConfig.token} onChange={(event) => setJenkinsConfig((current) => ({ ...current, token: event.target.value }))} /></label>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-title">
+              <h2>Schedules</h2>
+              <button className="secondary" onClick={addSchedule}><Plus size={18} /> Add schedule</button>
+            </div>
+            <div className="schedule-list">
+              {schedules.map((schedule) => (
+                <div className="schedule-row" key={schedule.id}>
+                  <label>Name<input value={schedule.name} onChange={(event) => updateSchedule(schedule.id, { name: event.target.value })} /></label>
+                  <label>Test<select value={schedule.testCaseId} onChange={(event) => updateSchedule(schedule.id, { testCaseId: event.target.value })}>
+                    {tests.map((test) => <option key={test.id} value={test.id}>{test.title}</option>)}
+                  </select></label>
+                  <label>Cadence<select value={schedule.cadence} onChange={(event) => updateSchedule(schedule.id, { cadence: event.target.value as ScheduleConfig["cadence"] })}>
+                    {["Hourly", "Daily", "Weekly"].map((cadence) => <option key={cadence}>{cadence}</option>)}
+                  </select></label>
+                  <label>Time<input type="time" value={schedule.time} onChange={(event) => updateSchedule(schedule.id, { time: event.target.value })} /></label>
+                  <label className="check"><input type="checkbox" checked={schedule.enabled} onChange={(event) => updateSchedule(schedule.id, { enabled: event.target.checked })} /> Enabled</label>
+                  <button className="secondary" onClick={() => queueSchedule(schedule)}>Run now</button>
+                  <button className="icon-button danger-icon" title="Delete schedule" onClick={() => setSchedules((current) => current.filter((item) => item.id !== schedule.id))}><Trash2 size={16} /></button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
         <section className="panel">
           <div className="panel-title">
             <h2>Run history</h2>
@@ -1247,6 +1500,11 @@ function App() {
   }
 
   function renderRunDetail(run: RunRecord) {
+    const stepResults = run.stepResults ?? [];
+    const passedSteps = stepResults.filter((step) => step.status === "PASSED").length;
+    const failedSteps = stepResults.filter((step) => step.status === "FAILED").length;
+    const skippedSteps = stepResults.filter((step) => step.status === "SKIPPED").length;
+
     return (
       <section className={`run-detail ${run.status.toLowerCase()}`}>
         <div className="run-detail-header">
@@ -1254,12 +1512,27 @@ function App() {
             <StatusBadge status={run.status} />
             <h2>{run.testTitle}</h2>
             <p>{run.id} · {run.browser} · {run.environment} · {formatMs(run.durationMs)}</p>
+            <p>{run.triggerSource ?? "UI"}{run.dataSetName ? ` · ${run.dataSetName}` : ""}{run.dataRowName ? ` · ${run.dataRowName}` : ""}</p>
           </div>
           <div className="run-mode">
             <span>Execution</span>
             <strong>{executionLabel(run.executionMode)}</strong>
           </div>
         </div>
+
+        <div className="step-summary-grid">
+          <div className="metric success"><span>Passed steps</span><strong>{passedSteps}</strong></div>
+          <div className="metric danger"><span>Failed steps</span><strong>{failedSteps}</strong></div>
+          <div className="metric warn"><span>Skipped steps</span><strong>{skippedSteps}</strong></div>
+          <div className="metric"><span>Total steps</span><strong>{stepResults.length}</strong></div>
+        </div>
+
+        {run.jenkinsBuild && (
+          <div className="trace-result">
+            <span>Jenkins</span>
+            <a className="text-button" href={run.jenkinsBuild} target="_blank" rel="noreferrer">Open queued build</a>
+          </div>
+        )}
 
         {(run.video || run.trace) && (
           <div className="run-media">
@@ -1285,11 +1558,11 @@ function App() {
           <div className="step-results-head">
             <span>#</span><span>Action</span><span>Locator</span><span>Expected</span><span>Status</span><span>Duration</span><span>Screenshot</span><span>Message</span>
           </div>
-          {run.stepResults?.length ? (
-            run.stepResults.map((step) => (
-              <div className="step-result-row" key={`${run.id}-${step.stepId}`}>
+          {stepResults.length ? (
+            stepResults.map((step) => (
+              <div className={`step-result-row ${step.status.toLowerCase()}`} key={`${run.id}-${step.stepId}`}>
                 <strong>{step.stepNumber}</strong>
-                <span>{step.actionType}</span>
+                <span>{actionLabels[step.actionType]}</span>
                 <span>{step.locatorType ? `${step.locatorType}: ${step.locatorValue}` : "-"}</span>
                 <span>{step.expectedResult || "-"}</span>
                 <span><StatusBadge status={step.status} /></span>
@@ -1389,7 +1662,9 @@ function App() {
     if (page === "tests") return renderTestLibrary();
     if (page === "builder") return renderBuilder();
     if (page === "recorder") return renderRecorder();
-    if (page === "config") return renderConfig();
+    if (page === "environments") return renderEnvironments();
+    if (page === "testdata") return renderTestData();
+    if (page === "utilities") return renderUtilities();
     if (page === "suites") return renderSuites();
     if (page === "runs") return renderRuns();
     if (page === "debug") return renderDebug();
@@ -1443,7 +1718,7 @@ function RunTable({
   return (
     <table>
       <thead>
-        <tr><th>Run</th><th>Test</th><th>Suite</th><th>Status</th><th>Browser</th><th>Environment</th><th>Duration</th><th>Started</th><th></th></tr>
+        <tr><th>Run</th><th>Test</th><th>Suite</th><th>Status</th><th>Source</th><th>Data</th><th>Browser</th><th>Environment</th><th>Duration</th><th>Started</th><th></th></tr>
       </thead>
       <tbody>
         {runs.map((run) => (
@@ -1454,6 +1729,8 @@ function RunTable({
             <td>{run.testTitle}</td>
             <td>{run.suiteName}</td>
             <td><StatusBadge status={run.status} /></td>
+            <td>{run.triggerSource ?? "UI"}</td>
+            <td>{run.dataRowName ?? run.dataSetName ?? "-"}</td>
             <td>{run.browser}</td>
             <td>{run.environment}</td>
             <td>{formatMs(run.durationMs)}</td>
