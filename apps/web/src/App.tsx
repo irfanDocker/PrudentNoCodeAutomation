@@ -275,6 +275,14 @@ function dataRowsForDataSet(dataSet: DataSet | undefined): DataRow[] {
   return [];
 }
 
+function dataColumnNames(dataSet: DataSet | undefined) {
+  return Array.from(new Set(dataRowsForDataSet(dataSet).flatMap((row) => Object.keys(row.variables)))).sort();
+}
+
+function csvValue(value: string | boolean) {
+  return `"${String(value).replaceAll("\"", "\"\"")}"`;
+}
+
 function emptyStep(stepNumber: number): TestStep {
   return {
     id: uid("step"),
@@ -309,6 +317,22 @@ function exportRun(run: RunRecord) {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `${run.id}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportDataSet(dataSet: DataSet) {
+  const rows = dataRowsForDataSet(dataSet);
+  const columns = dataColumnNames(dataSet);
+  const header = ["enabled", "row_name", ...columns];
+  const csv = [
+    header.map(csvValue).join(","),
+    ...rows.map((row) => [row.enabled, row.name, ...columns.map((column) => row.variables[column] ?? "")].map(csvValue).join(","))
+  ].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${dataSet.name.replaceAll(/\s+/g, "-").toLowerCase()}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -355,6 +379,8 @@ function App() {
   const selectedScenario = scenarioData.find((scenario) => scenario.id === selectedScenarioId) ?? scenarioData[0];
   const selectedDataRows = dataRowsForDataSet(selectedDataSet);
   const selectedDataRow = selectedDataRows.find((row) => row.id === selectedDataRowId) ?? selectedDataRows[0];
+  const selectedDataColumns = dataColumnNames(selectedDataSet);
+  const availableDataTokens = selectedDataColumns.map((column) => `{{${column}}}`);
 
   useEffect(() => {
     window.localStorage.setItem(storageKeys.tests, JSON.stringify(tests));
@@ -605,6 +631,60 @@ function App() {
     );
   }
 
+  function updateDataCell(dataSetId: string, rowId: string, column: string, value: string) {
+    setDataSets((current) =>
+      current.map((dataSet) =>
+        dataSet.id === dataSetId
+          ? {
+              ...dataSet,
+              rows: dataRowsForDataSet(dataSet).map((row) =>
+                row.id === rowId ? { ...row, variables: { ...row.variables, [column]: value } } : row
+              ),
+              variables: undefined
+            }
+          : dataSet
+      )
+    );
+  }
+
+  function addDataColumn(dataSetId: string) {
+    const name = window.prompt("Column name, for example email or password");
+    const column = name?.trim();
+    if (!column) return;
+
+    setDataSets((current) =>
+      current.map((dataSet) =>
+        dataSet.id === dataSetId
+          ? {
+              ...dataSet,
+              rows: dataRowsForDataSet(dataSet).map((row) => ({
+                ...row,
+                variables: { ...row.variables, [column]: row.variables[column] ?? "" }
+              })),
+              variables: undefined
+            }
+          : dataSet
+      )
+    );
+  }
+
+  function deleteDataColumn(dataSetId: string, column: string) {
+    setDataSets((current) =>
+      current.map((dataSet) => {
+        if (dataSet.id !== dataSetId) return dataSet;
+
+        return {
+          ...dataSet,
+          rows: dataRowsForDataSet(dataSet).map((row) => {
+            const { [column]: _removed, ...variables } = row.variables;
+            return { ...row, variables };
+          }),
+          variables: undefined
+        };
+      })
+    );
+  }
+
   function deleteDataRow(dataSetId: string, rowId: string) {
     setDataSets((current) =>
       current.map((dataSet) =>
@@ -684,6 +764,21 @@ function App() {
       );
     }
 
+    function renderTokenPicker() {
+      if (!availableDataTokens.length || field === "locatorType" || field === "waitMs") return null;
+
+      return (
+        <select className="token-picker" value="" onChange={(event) => {
+          const token = event.target.value;
+          if (!token) return;
+          onChange(field, `${value}${value ? " " : ""}${token}`);
+        }}>
+          <option value="">Insert test data</option>
+          {availableDataTokens.map((token) => <option key={token} value={token}>{token}</option>)}
+        </select>
+      );
+    }
+
     if (field === "waitMs") {
       return (
         <label key={field}>
@@ -709,6 +804,7 @@ function App() {
             rows={3}
             onChange={(event) => onChange(field, event.target.value)}
           />
+          {renderTokenPicker()}
         </label>
       );
     }
@@ -717,6 +813,7 @@ function App() {
       <label key={field}>
         {label}
         <input placeholder={placeholder} value={value} onChange={(event) => onChange(field, event.target.value)} />
+        {renderTokenPicker()}
       </label>
     );
   }
@@ -1191,6 +1288,18 @@ function App() {
           </div>
         </section>
 
+        {!!availableDataTokens.length && (
+          <section className="panel token-panel">
+            <div className="panel-title">
+              <h2>Test data available to steps</h2>
+              <span className="badge neutral">{selectedDataSet?.name}</span>
+            </div>
+            <div className="token-list">
+              {availableDataTokens.map((token) => <code key={token}>{token}</code>)}
+            </div>
+          </section>
+        )}
+
         <section className="panel">
           <div className="panel-title">
             <h2>Steps</h2>
@@ -1336,21 +1445,42 @@ function App() {
                 <div className="form-grid">
                   <label>Name<input value={dataSet.name} onChange={(event) => setDataSets((current) => current.map((item) => item.id === dataSet.id ? { ...item, name: event.target.value } : item))} /></label>
                 </div>
-                <div className="data-row-list">
-                  {dataRowsForDataSet(dataSet).map((row) => (
-                    <div className="data-row-card" key={row.id}>
-                      <div className="form-grid">
-                        <label>Row name<input value={row.name} onChange={(event) => updateDataRow(dataSet.id, row.id, { name: event.target.value })} /></label>
-                        <label className="check"><input type="checkbox" checked={row.enabled} onChange={(event) => updateDataRow(dataSet.id, row.id, { enabled: event.target.checked })} /> Enabled</label>
-                        {renderVariablesField(row.variables, (variables) => updateDataRow(dataSet.id, row.id, { variables }), "Row variables (key=value)")}
-                      </div>
-                      <button className="icon-button danger-icon" title="Delete data row" onClick={() => deleteDataRow(dataSet.id, row.id)}><Trash2 size={16} /></button>
-                    </div>
-                  ))}
+                <div className="excel-table-wrap">
+                  <table className="excel-table">
+                    <thead>
+                      <tr>
+                        <th>Run</th>
+                        <th>Row name</th>
+                        {dataColumnNames(dataSet).map((column) => (
+                          <th key={column}>
+                            <span>{column}</span>
+                            <button className="icon-button danger-icon" title={`Delete ${column}`} onClick={() => deleteDataColumn(dataSet.id, column)}><Trash2 size={14} /></button>
+                          </th>
+                        ))}
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dataRowsForDataSet(dataSet).map((row) => (
+                        <tr key={row.id}>
+                          <td><input type="checkbox" checked={row.enabled} onChange={(event) => updateDataRow(dataSet.id, row.id, { enabled: event.target.checked })} /></td>
+                          <td><input value={row.name} onChange={(event) => updateDataRow(dataSet.id, row.id, { name: event.target.value })} /></td>
+                          {dataColumnNames(dataSet).map((column) => (
+                            <td key={column}>
+                              <input value={row.variables[column] ?? ""} onChange={(event) => updateDataCell(dataSet.id, row.id, column, event.target.value)} />
+                            </td>
+                          ))}
+                          <td><button className="icon-button danger-icon" title="Delete data row" onClick={() => deleteDataRow(dataSet.id, row.id)}><Trash2 size={16} /></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
                 <div className="config-actions">
                   <button className="secondary" onClick={() => setSelectedDataSetId(dataSet.id)}>Use</button>
                   <button className="secondary" onClick={() => addDataRow(dataSet.id)}><Plus size={18} /> Add row</button>
+                  <button className="secondary" onClick={() => addDataColumn(dataSet.id)}><Plus size={18} /> Add column</button>
+                  <button className="secondary" onClick={() => exportDataSet(dataSet)}><Download size={18} /> Export CSV</button>
                   <button className="icon-button danger-icon" title="Delete data set" onClick={() => deleteDataSet(dataSet.id)}><Trash2 size={16} /></button>
                 </div>
               </div>
