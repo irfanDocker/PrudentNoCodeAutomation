@@ -1,4 +1,4 @@
-import type { RunRecord, TestCase, TestSuite } from "./types";
+import type { DataSet, EnvironmentConfig, RunRecord, ScenarioData, TestCase, TestSuite, UtilityBlock } from "./types";
 
 export const actionTypes = [
   "goto",
@@ -170,6 +170,107 @@ export const initialSuites: TestSuite[] = [
   { id: "suite-smoke", name: "Smoke Test", suiteType: "SMOKE", testCaseIds: ["tc-login-001"] },
   { id: "suite-regression", name: "Regression Test", suiteType: "REGRESSION", testCaseIds: ["tc-login-001", "tc-checkout-014"] },
   { id: "suite-sprint", name: "Sprint Test", suiteType: "SPRINT", testCaseIds: ["tc-profile-009"] }
+];
+
+export const initialEnvironments: EnvironmentConfig[] = [
+  {
+    id: "env-qa",
+    name: "QA",
+    baseUrl: "https://example.com",
+    apiUrl: "http://localhost:4000",
+    dbUrl: "mysql://qa_user:password@localhost:3306/prudent_qa",
+    variables: {
+      environment: "qa",
+      release: "current"
+    }
+  },
+  {
+    id: "env-staging",
+    name: "Staging",
+    baseUrl: "https://example.com",
+    apiUrl: "https://staging-api.example.com",
+    dbUrl: "mysql://staging_user:password@localhost:3306/prudent_staging",
+    variables: {
+      environment: "staging",
+      release: "candidate"
+    }
+  }
+];
+
+export const initialDataSets: DataSet[] = [
+  {
+    id: "data-valid-user",
+    name: "Valid portal user",
+    variables: {
+      email: "qa@example.com",
+      password: "Password123!",
+      phone: "5551234567"
+    }
+  },
+  {
+    id: "data-invalid-phone",
+    name: "Invalid phone profile",
+    variables: {
+      email: "qa@example.com",
+      phone: "123"
+    }
+  }
+];
+
+export const initialScenarioData: ScenarioData[] = [
+  {
+    id: "scenario-login-smoke",
+    name: "Login smoke scenario",
+    variables: {
+      startPath: "/login",
+      expectedTitle: "Example Domain",
+      expectedMessage: "Dashboard opens"
+    }
+  }
+];
+
+export const initialUtilities: UtilityBlock[] = [
+  {
+    id: "util-login",
+    name: "Portal login",
+    description: "Shared login steps",
+    updatedAt: "2026-05-21T13:15:00.000Z",
+    steps: [
+      {
+        id: "util-login-1",
+        stepNumber: 1,
+        actionType: "goto",
+        locatorType: "",
+        locatorValue: "",
+        inputValue: "{{startPath}}",
+        expectedResult: "",
+        waitMs: "",
+        timeoutMs: 10000
+      },
+      {
+        id: "util-login-2",
+        stepNumber: 2,
+        actionType: "type",
+        locatorType: "label",
+        locatorValue: "Email",
+        inputValue: "{{email}}",
+        expectedResult: "",
+        waitMs: "",
+        timeoutMs: 10000
+      },
+      {
+        id: "util-login-3",
+        stepNumber: 3,
+        actionType: "type",
+        locatorType: "label",
+        locatorValue: "Password",
+        inputValue: "{{password}}",
+        expectedResult: "",
+        waitMs: "",
+        timeoutMs: 10000
+      }
+    ]
+  }
 ];
 
 export const initialRuns: RunRecord[] = [

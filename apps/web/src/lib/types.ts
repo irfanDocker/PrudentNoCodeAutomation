@@ -55,6 +55,35 @@ export interface TestSuite {
   testCaseIds: string[];
 }
 
+export interface EnvironmentConfig {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiUrl: string;
+  dbUrl: string;
+  variables: Record<string, string>;
+}
+
+export interface DataSet {
+  id: string;
+  name: string;
+  variables: Record<string, string>;
+}
+
+export interface ScenarioData {
+  id: string;
+  name: string;
+  variables: Record<string, string>;
+}
+
+export interface UtilityBlock {
+  id: string;
+  name: string;
+  description: string;
+  steps: TestStep[];
+  updatedAt: string;
+}
+
 export interface RunRecord {
   id: string;
   testCaseId: string;

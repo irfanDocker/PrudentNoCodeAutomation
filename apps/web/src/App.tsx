@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Copy,
+  Database,
   Download,
   FileText,
   Layers3,
@@ -18,10 +19,34 @@ import {
   XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { actionLabels, actionTypes, initialRuns, initialSuites, initialTests, locatorTypes, suiteTypes } from "./lib/mockData";
-import type { ActionType, LocatorType, RunRecord, SuiteType, TestCase, TestStep, TestSuite } from "./lib/types";
+import {
+  actionLabels,
+  actionTypes,
+  initialDataSets,
+  initialEnvironments,
+  initialRuns,
+  initialScenarioData,
+  initialSuites,
+  initialTests,
+  initialUtilities,
+  locatorTypes,
+  suiteTypes
+} from "./lib/mockData";
+import type {
+  ActionType,
+  DataSet,
+  EnvironmentConfig,
+  LocatorType,
+  RunRecord,
+  ScenarioData,
+  SuiteType,
+  TestCase,
+  TestStep,
+  TestSuite,
+  UtilityBlock
+} from "./lib/types";
 
-type Page = "dashboard" | "tests" | "builder" | "recorder" | "suites" | "runs" | "debug" | "reports";
+type Page = "dashboard" | "tests" | "builder" | "recorder" | "config" | "suites" | "runs" | "debug" | "reports";
 type ActionField = "locatorType" | "locatorValue" | "inputValue" | "expectedResult" | "waitMs";
 
 interface ActionFieldConfig {
@@ -35,7 +60,11 @@ interface ActionFieldConfig {
 const storageKeys = {
   tests: "prudent.tests",
   suites: "prudent.suites",
-  runs: "prudent.runs"
+  runs: "prudent.runs",
+  environments: "prudent.environments",
+  dataSets: "prudent.dataSets",
+  scenarioData: "prudent.scenarioData",
+  utilities: "prudent.utilities"
 };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
@@ -45,6 +74,7 @@ const navItems: Array<{ id: Page; label: string; icon: typeof Activity }> = [
   { id: "tests", label: "Tests", icon: ClipboardList },
   { id: "builder", label: "Builder", icon: Settings2 },
   { id: "recorder", label: "Recorder", icon: Radio },
+  { id: "config", label: "Config", icon: Database },
   { id: "suites", label: "Suites", icon: Layers3 },
   { id: "runs", label: "Runs", icon: Play },
   { id: "debug", label: "Debug", icon: Bug },
@@ -188,6 +218,44 @@ function formatMs(value: number) {
   return `${(value / 1000).toFixed(1)}s`;
 }
 
+function variablesToText(variables: Record<string, string>) {
+  return Object.entries(variables)
+    .map(([key, value]) => `${key}=${value}`)
+    .join("\n");
+}
+
+function textToVariables(value: string) {
+  return value.split("\n").reduce<Record<string, string>>((variables, line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return variables;
+
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex === -1) {
+      variables[trimmed] = "";
+      return variables;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    if (key) {
+      variables[key] = trimmed.slice(separatorIndex + 1).trim();
+    }
+    return variables;
+  }, {});
+}
+
+function resolveTokens(value: string, variables: Record<string, string>) {
+  return value.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (match, key: string) => variables[key] ?? match);
+}
+
+function applyTokensToStep(step: TestStep, variables: Record<string, string>): TestStep {
+  return {
+    ...step,
+    locatorValue: resolveTokens(step.locatorValue, variables),
+    inputValue: resolveTokens(step.inputValue, variables),
+    expectedResult: resolveTokens(step.expectedResult, variables)
+  };
+}
+
 function emptyStep(stepNumber: number): TestStep {
   return {
     id: uid("step"),
@@ -241,8 +309,15 @@ function App() {
   const [tests, setTests] = useState<TestCase[]>(() => readStored(storageKeys.tests, initialTests));
   const [suites, setSuites] = useState<TestSuite[]>(() => readStored(storageKeys.suites, initialSuites));
   const [runs, setRuns] = useState<RunRecord[]>(() => readStored(storageKeys.runs, initialRuns));
+  const [environments, setEnvironments] = useState<EnvironmentConfig[]>(() => readStored(storageKeys.environments, initialEnvironments));
+  const [dataSets, setDataSets] = useState<DataSet[]>(() => readStored(storageKeys.dataSets, initialDataSets));
+  const [scenarioData, setScenarioData] = useState<ScenarioData[]>(() => readStored(storageKeys.scenarioData, initialScenarioData));
+  const [utilities, setUtilities] = useState<UtilityBlock[]>(() => readStored(storageKeys.utilities, initialUtilities));
   const [selectedTestId, setSelectedTestId] = useState(() => readStored(storageKeys.tests, initialTests)[0]?.id ?? "");
   const [selectedRunId, setSelectedRunId] = useState(() => readStored(storageKeys.runs, initialRuns)[0]?.id ?? "");
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(() => readStored(storageKeys.environments, initialEnvironments)[0]?.id ?? "");
+  const [selectedDataSetId, setSelectedDataSetId] = useState(() => readStored(storageKeys.dataSets, initialDataSets)[0]?.id ?? "");
+  const [selectedScenarioId, setSelectedScenarioId] = useState(() => readStored(storageKeys.scenarioData, initialScenarioData)[0]?.id ?? "");
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<SuiteType | "ALL">("ALL");
   const [browser, setBrowser] = useState<RunRecord["browser"]>("chromium");
@@ -252,6 +327,9 @@ function App() {
 
   const selectedTest = tests.find((test) => test.id === selectedTestId) ?? tests[0];
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
+  const selectedEnvironment = environments.find((environment) => environment.id === selectedEnvironmentId) ?? environments[0];
+  const selectedDataSet = dataSets.find((dataSet) => dataSet.id === selectedDataSetId) ?? dataSets[0];
+  const selectedScenario = scenarioData.find((scenario) => scenario.id === selectedScenarioId) ?? scenarioData[0];
 
   useEffect(() => {
     window.localStorage.setItem(storageKeys.tests, JSON.stringify(tests));
@@ -264,6 +342,22 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(storageKeys.runs, JSON.stringify(runs));
   }, [runs]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.environments, JSON.stringify(environments));
+  }, [environments]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.dataSets, JSON.stringify(dataSets));
+  }, [dataSets]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.scenarioData, JSON.stringify(scenarioData));
+  }, [scenarioData]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.utilities, JSON.stringify(utilities));
+  }, [utilities]);
 
   const filteredTests = useMemo(() => {
     return tests.filter((test) => {
@@ -280,6 +374,29 @@ function App() {
   const passedRuns = runs.filter((run) => run.status === "PASSED").length;
   const failedRuns = runs.filter((run) => run.status === "FAILED").length;
   const skippedRuns = runs.filter((run) => run.status === "SKIPPED").length;
+
+  function activeRunVariables() {
+    return {
+      ...(selectedEnvironment?.variables ?? {}),
+      baseUrl: selectedEnvironment?.baseUrl ?? "",
+      apiUrl: selectedEnvironment?.apiUrl ?? "",
+      dbUrl: selectedEnvironment?.dbUrl ?? "",
+      environment: selectedEnvironment?.name ?? "",
+      ...(selectedDataSet?.variables ?? {}),
+      ...(selectedScenario?.variables ?? {})
+    };
+  }
+
+  function executableTest(test: TestCase) {
+    const variables = activeRunVariables();
+    const baseUrl = selectedEnvironment?.baseUrl || test.baseUrl || "";
+
+    return {
+      ...test,
+      baseUrl: resolveTokens(baseUrl, variables),
+      steps: test.steps.map((step) => applyTokensToStep(step, variables))
+    };
+  }
 
   function createTest() {
     const test: TestCase = {
@@ -360,6 +477,95 @@ function App() {
     );
     if (selectedTestId === testId) {
       setSelectedTestId(tests.find((test) => test.id !== testId)?.id ?? "");
+    }
+  }
+
+  function cloneStepsForInsert(steps: TestStep[], startAt: number) {
+    return steps.map((step, index) => ({
+      ...step,
+      id: uid("step"),
+      stepNumber: startAt + index
+    }));
+  }
+
+  function insertUtility(utility: UtilityBlock) {
+    if (!selectedTest) return;
+    updateSelectedTest({
+      steps: [
+        ...selectedTest.steps,
+        ...cloneStepsForInsert(utility.steps, selectedTest.steps.length + 1)
+      ]
+    });
+    setPage("builder");
+  }
+
+  function createUtilityFromSelectedTest() {
+    if (!selectedTest) return;
+    const utility: UtilityBlock = {
+      id: uid("util"),
+      name: `${selectedTest.title} utility`,
+      description: selectedTest.project,
+      updatedAt: new Date().toISOString(),
+      steps: cloneStepsForInsert(selectedTest.steps, 1)
+    };
+    setUtilities((current) => [utility, ...current]);
+    setPage("config");
+  }
+
+  function updateUtilityFromSelectedTest(utilityId: string) {
+    if (!selectedTest) return;
+    setUtilities((current) =>
+      current.map((utility) =>
+        utility.id === utilityId
+          ? { ...utility, steps: cloneStepsForInsert(selectedTest.steps, 1), updatedAt: new Date().toISOString() }
+          : utility
+      )
+    );
+  }
+
+  function addEnvironment() {
+    const environment: EnvironmentConfig = {
+      id: uid("env"),
+      name: "New environment",
+      baseUrl: selectedTest?.baseUrl ?? "",
+      apiUrl: apiBaseUrl,
+      dbUrl: "",
+      variables: {}
+    };
+    setEnvironments((current) => [environment, ...current]);
+    setSelectedEnvironmentId(environment.id);
+  }
+
+  function addDataSet() {
+    const dataSet: DataSet = { id: uid("data"), name: "New data set", variables: {} };
+    setDataSets((current) => [dataSet, ...current]);
+    setSelectedDataSetId(dataSet.id);
+  }
+
+  function addScenarioData() {
+    const scenario: ScenarioData = { id: uid("scenario"), name: "New scenario", variables: {} };
+    setScenarioData((current) => [scenario, ...current]);
+    setSelectedScenarioId(scenario.id);
+  }
+
+  function deleteEnvironment(environmentId: string) {
+    setEnvironments((current) => current.filter((environment) => environment.id !== environmentId));
+    if (selectedEnvironmentId === environmentId) {
+      setSelectedEnvironmentId(environments.find((environment) => environment.id !== environmentId)?.id ?? "");
+    }
+  }
+
+  function deleteDataSet(dataSetId: string) {
+    setDataSets((current) => current.filter((dataSet) => dataSet.id !== dataSetId));
+    if (selectedDataSetId === dataSetId) {
+      setSelectedDataSetId(dataSets.find((dataSet) => dataSet.id !== dataSetId)?.id ?? "");
+    }
+  }
+
+  function deleteScenarioData(scenarioId: string) {
+    setScenarioData((current) => current.filter((scenario) => scenario.id !== scenarioId));
+    if (selectedScenarioId === scenarioId) {
+      setSelectedScenarioId(scenarioData.find((scenario) => scenario.id !== scenarioId)?.id ?? "");
     }
   }
 
@@ -531,9 +737,10 @@ function App() {
 
   async function runTest(test: TestCase, forcedStatus?: RunRecord["status"]) {
     if (runningTestId) return;
+    const configuredTest = executableTest(test);
 
     if (forcedStatus) {
-      const demoRun = createDemoRun(test, forcedStatus);
+      const demoRun = createDemoRun(configuredTest, forcedStatus);
       setRuns((current) => [demoRun, ...current]);
       setSelectedRunId(demoRun.id);
       setPage(demoRun.status === "FAILED" ? "debug" : "runs");
@@ -548,9 +755,9 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           testCase: {
-            title: test.title,
-            baseUrl: test.baseUrl || "",
-            steps: test.steps.map((step) => ({
+            title: configuredTest.title,
+            baseUrl: configuredTest.baseUrl || "",
+            steps: configuredTest.steps.map((step) => ({
               id: step.id,
               stepNumber: step.stepNumber,
               actionType: step.actionType,
@@ -565,7 +772,7 @@ function App() {
           options: {
             browser,
             headless,
-            environment: "qa",
+            environment: selectedEnvironment?.name ?? "qa",
             screenshots: true,
             trace: true,
             video: true
@@ -582,13 +789,13 @@ function App() {
       const failedStep = result.stepResults?.find((step: { status: string }) => step.status === "FAILED");
       const run: RunRecord = {
         id: result.id,
-        testCaseId: test.id,
-        testTitle: test.title,
-        suiteName: test.groupType === "CUSTOM" ? "Custom Test Suite" : `${test.groupType[0]}${test.groupType.slice(1).toLowerCase()} Test`,
+        testCaseId: configuredTest.id,
+        testTitle: configuredTest.title,
+        suiteName: configuredTest.groupType === "CUSTOM" ? "Custom Test Suite" : `${configuredTest.groupType[0]}${configuredTest.groupType.slice(1).toLowerCase()} Test`,
         status: result.status,
         executionMode: "LOCAL_PLAYWRIGHT",
         browser: result.browser,
-        environment: result.environment,
+        environment: selectedEnvironment?.name ?? result.environment,
         durationMs: result.durationMs,
         startedAt: result.startedAt,
         stepResults: result.stepResults.map(
@@ -629,7 +836,7 @@ function App() {
       setPage(run.status === "FAILED" ? "debug" : "runs");
     } catch (error) {
       const fallbackRun = createDemoRun(
-        test,
+        configuredTest,
         "FAILED",
         `Local Playwright could not run. ${error instanceof Error ? error.message : ""}`
       );
@@ -777,6 +984,15 @@ function App() {
             <label>Tags<input value={selectedTest.tags.join(", ")} onChange={(event) => updateSelectedTest({ tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} /></label>
           </div>
           <div className="run-options">
+            <label>Environment<select value={selectedEnvironmentId} onChange={(event) => setSelectedEnvironmentId(event.target.value)}>
+              {environments.map((environment) => <option key={environment.id} value={environment.id}>{environment.name}</option>)}
+            </select></label>
+            <label>Test data<select value={selectedDataSetId} onChange={(event) => setSelectedDataSetId(event.target.value)}>
+              {dataSets.map((dataSet) => <option key={dataSet.id} value={dataSet.id}>{dataSet.name}</option>)}
+            </select></label>
+            <label>Scenario<select value={selectedScenarioId} onChange={(event) => setSelectedScenarioId(event.target.value)}>
+              {scenarioData.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
+            </select></label>
             <label>Browser<select value={browser} onChange={(event) => setBrowser(event.target.value as RunRecord["browser"])}>{["chromium", "chrome", "firefox", "webkit"].map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="check"><input type="checkbox" checked={headless} onChange={(event) => setHeadless(event.target.checked)} /> Headless</label>
             <button className="primary" disabled={runningTestId === selectedTest.id} onClick={() => runTest(selectedTest)}><Play size={18} /> {runningTestId === selectedTest.id ? "Running" : "Run now"}</button>
@@ -787,7 +1003,17 @@ function App() {
         <section className="panel">
           <div className="panel-title">
             <h2>Steps</h2>
-            <button className="secondary" onClick={addStep}><Plus size={18} /> Add step</button>
+            <div className="panel-actions">
+              <select value="" onChange={(event) => {
+                const utility = utilities.find((item) => item.id === event.target.value);
+                if (utility) insertUtility(utility);
+              }}>
+                <option value="">Insert utility</option>
+                {utilities.map((utility) => <option key={utility.id} value={utility.id}>{utility.name}</option>)}
+              </select>
+              <button className="secondary" onClick={createUtilityFromSelectedTest}><Save size={18} /> Save as utility</button>
+              <button className="secondary" onClick={addStep}><Plus size={18} /> Add step</button>
+            </div>
           </div>
           <div className="step-table">
             {selectedTest.steps.map((step) => (
@@ -854,6 +1080,122 @@ function App() {
                 <strong>{step.stepNumber}</strong>
                 <span>{actionLabels[step.actionType]}</span>
                 <small>{stepDetailText(step)}</small>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderVariablesField(
+    variables: Record<string, string>,
+    onChange: (variables: Record<string, string>) => void,
+    label = "Variables (key=value)"
+  ) {
+    return (
+      <label className="wide-field">
+        {label}
+        <textarea rows={4} value={variablesToText(variables)} onChange={(event) => onChange(textToVariables(event.target.value))} />
+      </label>
+    );
+  }
+
+  function renderConfig() {
+    return (
+      <div className="config-layout">
+        <section className="panel config-panel">
+          <div className="panel-title">
+            <h2>Environment config</h2>
+            <button className="secondary" onClick={addEnvironment}><Plus size={18} /> Add environment</button>
+          </div>
+          <div className="config-list">
+            {environments.map((environment) => (
+              <div className="config-card" key={environment.id}>
+                <div className="form-grid">
+                  <label>Name<input value={environment.name} onChange={(event) => setEnvironments((current) => current.map((item) => item.id === environment.id ? { ...item, name: event.target.value } : item))} /></label>
+                  <label>Base URL<input value={environment.baseUrl} onChange={(event) => setEnvironments((current) => current.map((item) => item.id === environment.id ? { ...item, baseUrl: event.target.value } : item))} /></label>
+                  <label>API URL<input value={environment.apiUrl} onChange={(event) => setEnvironments((current) => current.map((item) => item.id === environment.id ? { ...item, apiUrl: event.target.value } : item))} /></label>
+                  <label className="wide-field">Database URL<input value={environment.dbUrl} onChange={(event) => setEnvironments((current) => current.map((item) => item.id === environment.id ? { ...item, dbUrl: event.target.value } : item))} /></label>
+                  {renderVariablesField(environment.variables, (variables) => setEnvironments((current) => current.map((item) => item.id === environment.id ? { ...item, variables } : item)))}
+                </div>
+                <div className="config-actions">
+                  <button className="secondary" onClick={() => setSelectedEnvironmentId(environment.id)}>Use</button>
+                  <button className="icon-button danger-icon" title="Delete environment" onClick={() => deleteEnvironment(environment.id)}><Trash2 size={16} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel config-panel">
+          <div className="panel-title">
+            <h2>Test data</h2>
+            <button className="secondary" onClick={addDataSet}><Plus size={18} /> Add data</button>
+          </div>
+          <div className="config-list">
+            {dataSets.map((dataSet) => (
+              <div className="config-card" key={dataSet.id}>
+                <div className="form-grid">
+                  <label>Name<input value={dataSet.name} onChange={(event) => setDataSets((current) => current.map((item) => item.id === dataSet.id ? { ...item, name: event.target.value } : item))} /></label>
+                  {renderVariablesField(dataSet.variables, (variables) => setDataSets((current) => current.map((item) => item.id === dataSet.id ? { ...item, variables } : item)))}
+                </div>
+                <div className="config-actions">
+                  <button className="secondary" onClick={() => setSelectedDataSetId(dataSet.id)}>Use</button>
+                  <button className="icon-button danger-icon" title="Delete data set" onClick={() => deleteDataSet(dataSet.id)}><Trash2 size={16} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel config-panel">
+          <div className="panel-title">
+            <h2>Scenario data</h2>
+            <button className="secondary" onClick={addScenarioData}><Plus size={18} /> Add scenario</button>
+          </div>
+          <div className="config-list">
+            {scenarioData.map((scenario) => (
+              <div className="config-card" key={scenario.id}>
+                <div className="form-grid">
+                  <label>Name<input value={scenario.name} onChange={(event) => setScenarioData((current) => current.map((item) => item.id === scenario.id ? { ...item, name: event.target.value } : item))} /></label>
+                  {renderVariablesField(scenario.variables, (variables) => setScenarioData((current) => current.map((item) => item.id === scenario.id ? { ...item, variables } : item)))}
+                </div>
+                <div className="config-actions">
+                  <button className="secondary" onClick={() => setSelectedScenarioId(scenario.id)}>Use</button>
+                  <button className="icon-button danger-icon" title="Delete scenario data" onClick={() => deleteScenarioData(scenario.id)}><Trash2 size={16} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel config-panel">
+          <div className="panel-title">
+            <h2>Reusable utilities</h2>
+            <button className="secondary" onClick={createUtilityFromSelectedTest}><Save size={18} /> Save selected test</button>
+          </div>
+          <div className="config-list">
+            {utilities.map((utility) => (
+              <div className="config-card utility-card" key={utility.id}>
+                <div className="form-grid">
+                  <label>Name<input value={utility.name} onChange={(event) => setUtilities((current) => current.map((item) => item.id === utility.id ? { ...item, name: event.target.value, updatedAt: new Date().toISOString() } : item))} /></label>
+                  <label>Description<input value={utility.description} onChange={(event) => setUtilities((current) => current.map((item) => item.id === utility.id ? { ...item, description: event.target.value, updatedAt: new Date().toISOString() } : item))} /></label>
+                </div>
+                <div className="utility-steps">
+                  {utility.steps.map((step) => (
+                    <div className="utility-step" key={step.id}>
+                      <strong>{step.stepNumber}</strong>
+                      <span>{actionLabels[step.actionType]}</span>
+                      <small>{stepDetailText(step)}</small>
+                    </div>
+                  ))}
+                </div>
+                <div className="config-actions">
+                  <button className="secondary" onClick={() => insertUtility(utility)}>Insert</button>
+                  <button className="secondary" onClick={() => updateUtilityFromSelectedTest(utility.id)}>Replace from selected test</button>
+                  <button className="icon-button danger-icon" title="Delete utility" onClick={() => setUtilities((current) => current.filter((item) => item.id !== utility.id))}><Trash2 size={16} /></button>
+                </div>
               </div>
             ))}
           </div>
@@ -1047,6 +1389,7 @@ function App() {
     if (page === "tests") return renderTestLibrary();
     if (page === "builder") return renderBuilder();
     if (page === "recorder") return renderRecorder();
+    if (page === "config") return renderConfig();
     if (page === "suites") return renderSuites();
     if (page === "runs") return renderRuns();
     if (page === "debug") return renderDebug();

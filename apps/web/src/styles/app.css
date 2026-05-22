@@ -251,6 +251,14 @@ h2 {
   justify-content: flex-start;
 }
 
+.panel-actions,
+.config-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .search-box,
 .select-label {
   display: inline-flex;
@@ -530,6 +538,58 @@ label textarea {
   overflow-wrap: anywhere;
 }
 
+.config-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.config-panel {
+  min-width: 0;
+}
+
+.config-list {
+  display: grid;
+  gap: 12px;
+}
+
+.config-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.utility-card {
+  align-content: start;
+}
+
+.utility-steps {
+  display: grid;
+  gap: 8px;
+}
+
+.utility-step {
+  display: grid;
+  grid-template-columns: 34px minmax(120px, 0.7fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid #e7ecf2;
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+.utility-step strong {
+  color: #176b65;
+}
+
+.utility-step small {
+  color: #657384;
+  overflow-wrap: anywhere;
+}
+
 .suite-panel {
   display: grid;
   gap: 14px;
@@ -760,7 +820,8 @@ label textarea {
 
   .metric-grid,
   .suite-grid,
-  .recorder-layout {
+  .recorder-layout,
+  .config-layout {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 
@@ -821,7 +882,8 @@ label textarea {
 
   .metric-grid,
   .suite-grid,
-  .recorder-layout {
+  .recorder-layout,
+  .config-layout {
     grid-template-columns: 1fr;
   }
 
