@@ -165,6 +165,8 @@ export async function runLocalPlaywrightTest(testCase: LocalTestCase, optionsInp
 
   let browser: Browser | undefined;
   const stepResults: LocalStepResult[] = [];
+  const videoUrls: string[] = [];
+  let traceUrl: string | undefined;
   let status: RunStatus = "PASSED";
 
   try {
@@ -244,9 +246,18 @@ export async function runLocalPlaywrightTest(testCase: LocalTestCase, optionsInp
 
     if (options.trace) {
       await context.tracing.stop({ path: path.join(runDir, "trace.zip") });
+      traceUrl = `${env.PUBLIC_ARTIFACT_BASE_URL}/runs/${runId}/trace.zip`;
     }
 
     await context.close();
+
+    if (options.video) {
+      const videoDir = path.join(runDir, "videos");
+      if (await fs.pathExists(videoDir)) {
+        const videoFiles = (await fs.readdir(videoDir)).filter((fileName) => fileName.endsWith(".webm"));
+        videoUrls.push(...videoFiles.map((fileName) => `${env.PUBLIC_ARTIFACT_BASE_URL}/runs/${runId}/videos/${fileName}`));
+      }
+    }
   } finally {
     await browser?.close().catch(() => undefined);
   }
@@ -259,7 +270,9 @@ export async function runLocalPlaywrightTest(testCase: LocalTestCase, optionsInp
     environment: options.environment,
     startedAt: new Date(runStartedAt).toISOString(),
     artifactBaseUrl: `${env.PUBLIC_ARTIFACT_BASE_URL}/runs/${runId}`,
+    video: videoUrls[0],
+    videos: videoUrls,
+    trace: traceUrl,
     stepResults
   };
 }
-

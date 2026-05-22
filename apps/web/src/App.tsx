@@ -97,6 +97,12 @@ function StatusBadge({ status }: { status: RunRecord["status"] | TestCase["statu
   return <span className={`badge ${status.toLowerCase()}`}>{status}</span>;
 }
 
+function executionLabel(mode: RunRecord["executionMode"]) {
+  if (mode === "PLAYWRIGHT_API") return "Playwright API";
+  if (mode === "LOCAL_PLAYWRIGHT") return "Local Playwright";
+  return "UI demo";
+}
+
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
   const [tests, setTests] = useState<TestCase[]>(() => readStored(storageKeys.tests, initialTests));
@@ -302,7 +308,7 @@ function App() {
             environment: "qa",
             screenshots: true,
             trace: true,
-            video: false
+            video: true
           }
         })
       });
@@ -354,7 +360,8 @@ function App() {
         failedStepId: failedStep?.stepId,
         error: failedStep?.error,
         screenshot: failedStep?.screenshot,
-        trace: `${result.artifactBaseUrl}/trace.zip`
+        trace: result.trace ?? `${result.artifactBaseUrl}/trace.zip`,
+        video: result.video
       };
 
       setRuns((current) => [run, ...current]);
@@ -363,8 +370,8 @@ function App() {
     } catch (error) {
       const fallbackRun = createDemoRun(
         test,
-        undefined,
-        `Local Playwright API was unavailable, so this result used UI demo mode. ${error instanceof Error ? error.message : ""}`
+        "FAILED",
+        `Local Playwright could not run. ${error instanceof Error ? error.message : ""}`
       );
       setRuns((current) => [fallbackRun, ...current]);
       setSelectedRunId(fallbackRun.id);
@@ -601,9 +608,29 @@ function App() {
           </div>
           <div className="run-mode">
             <span>Execution</span>
-            <strong>{run.executionMode === "PLAYWRIGHT_API" ? "Playwright API" : "UI demo"}</strong>
+            <strong>{executionLabel(run.executionMode)}</strong>
           </div>
         </div>
+
+        {(run.video || run.trace) && (
+          <div className="run-media">
+            {run.video && (
+              <div className="video-result">
+                <div className="media-title">
+                  <h3>Video result</h3>
+                  <a className="text-button" href={run.video} target="_blank" rel="noreferrer">Open video</a>
+                </div>
+                <video controls src={run.video} />
+              </div>
+            )}
+            {run.trace && (
+              <div className="trace-result">
+                <span>Trace</span>
+                <a className="text-button" href={run.trace} target="_blank" rel="noreferrer">Open trace file</a>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="step-results">
           <div className="step-results-head">
@@ -698,7 +725,7 @@ function App() {
                 <td><StatusBadge status={run.status} /></td>
                 <td><button className="text-button">Open</button></td>
                 <td>{run.trace ? <button className="text-button">Trace</button> : "-"}</td>
-                <td>{run.video ? <button className="text-button">Video</button> : "-"}</td>
+                <td>{run.video ? <a className="text-button" href={run.video} target="_blank" rel="noreferrer">Video</a> : "-"}</td>
                 <td><button className="icon-button" title="Export CSV" onClick={() => exportRun(run)}><Download size={16} /></button></td>
               </tr>
             ))}
