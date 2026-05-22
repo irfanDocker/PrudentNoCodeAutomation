@@ -88,6 +88,27 @@ async function log(runId: string, message: string, level: "debug" | "info" | "wa
   });
 }
 
+async function attachScreenshot(runId: string, stepResultId: string, page: Page, runDir: string, stepNumber: number, status: "passed" | "failed") {
+  const screenshotsDir = path.join(runDir, "screenshots");
+  await fs.ensureDir(screenshotsDir);
+
+  const screenshotPath = path.join(screenshotsDir, `step-${String(stepNumber).padStart(3, "0")}-${status}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+
+  await prisma.attachment.create({
+    data: {
+      testRunId: runId,
+      stepResultId,
+      type: "SCREENSHOT",
+      fileName: path.basename(screenshotPath),
+      filePath: screenshotPath,
+      mimeType: "image/png"
+    }
+  });
+
+  return screenshotPath;
+}
+
 async function expectText(page: Page, step: TestStepInput, locator: Locator | null, timeoutMs: number) {
   const expected = step.expectedResult || step.inputValue || step.locatorValue;
 
@@ -223,12 +244,24 @@ export async function executeTestCaseRun(
         await log(runId, `Step ${step.stepNumber}: ${step.actionType}`, "info", stepResult.id);
         const locator = resolveLocator(page, step);
         const message = await runStep(page, context, step, locator, runDir, resolvedOptions);
+        const screenshotPath = resolvedOptions.screenshots
+          ? await attachScreenshot(runId, stepResult.id, page, runDir, step.stepNumber, "passed").catch(async (error) => {
+              await log(
+                runId,
+                `Step ${step.stepNumber} passed but screenshot capture failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+                "warn",
+                stepResult.id
+              );
+              return undefined;
+            })
+          : undefined;
 
         await prisma.testStepResult.update({
           where: { id: stepResult.id },
           data: {
             status: "PASSED",
             message,
+            screenshotPath,
             durationMs: durationFrom(stepStartedAt),
             endedAt: new Date()
           }
@@ -238,35 +271,30 @@ export async function executeTestCaseRun(
         failed += 1;
         finalStatus = "FAILED";
         const message = error instanceof Error ? error.message : "Unknown Playwright error";
-        const screenshotPath = path.join(runDir, `failed-step-${step.stepNumber}.png`);
-
-        if (resolvedOptions.screenshots) {
-          await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
-        }
+        const screenshotPath = resolvedOptions.screenshots
+          ? await attachScreenshot(runId, stepResult.id, page, runDir, step.stepNumber, "failed").catch(async (screenshotError) => {
+              await log(
+                runId,
+                `Step ${step.stepNumber} failed and screenshot capture also failed: ${
+                  screenshotError instanceof Error ? screenshotError.message : "Unknown error"
+                }`,
+                "warn",
+                stepResult.id
+              );
+              return undefined;
+            })
+          : undefined;
 
         await prisma.testStepResult.update({
           where: { id: stepResult.id },
           data: {
             status: "FAILED",
             error: message,
-            screenshotPath: resolvedOptions.screenshots ? screenshotPath : undefined,
+            screenshotPath,
             durationMs: durationFrom(stepStartedAt),
             endedAt: new Date()
           }
         });
-
-        if (resolvedOptions.screenshots) {
-          await prisma.attachment.create({
-            data: {
-              testRunId: runId,
-              stepResultId: stepResult.id,
-              type: "SCREENSHOT",
-              fileName: path.basename(screenshotPath),
-              filePath: screenshotPath,
-              mimeType: "image/png"
-            }
-          });
-        }
 
         await log(runId, message, "error", stepResult.id);
         skipped = testCase.steps.length - passed - failed;

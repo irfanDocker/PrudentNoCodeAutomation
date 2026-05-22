@@ -11,6 +11,7 @@ import { suiteRoutes } from "./routes/suiteRoutes.js";
 import { runRoutes } from "./routes/runRoutes.js";
 import { dashboardRoutes } from "./routes/dashboardRoutes.js";
 import { ciRoutes } from "./routes/ciRoutes.js";
+import { localRunRoutes } from "./routes/localRunRoutes.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
@@ -32,6 +33,7 @@ app.get("/health", (_request, response) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/ci", ciRoutes);
+app.use("/api/local-runs", localRunRoutes);
 app.use("/api/projects", requireAuth, projectRoutes);
 app.use("/api/test-cases", requireAuth, testCaseRoutes);
 app.use("/api/test-suites", requireAuth, suiteRoutes);
@@ -49,4 +51,3 @@ process.on("SIGTERM", () => {
 });
 
 export { app };
-

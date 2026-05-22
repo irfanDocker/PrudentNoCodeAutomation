@@ -118,7 +118,7 @@ router.get(
       throw new ApiError(404, "Run not found");
     }
 
-    const header = ["run_id", "test_case", "step", "action", "status", "message", "error", "duration_ms"];
+    const header = ["run_id", "test_case", "step", "action", "status", "message", "error", "duration_ms", "screenshot_path"];
     const rows = run.stepResults.map((step) => [
       run.id,
       run.testCase?.title,
@@ -127,7 +127,8 @@ router.get(
       step.status,
       step.message,
       step.error,
-      step.durationMs
+      step.durationMs,
+      step.screenshotPath
     ]);
 
     const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
@@ -138,4 +139,3 @@ router.get(
 );
 
 export { router as runRoutes };
-

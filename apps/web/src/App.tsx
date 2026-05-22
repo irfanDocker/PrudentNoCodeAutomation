@@ -28,6 +28,8 @@ const storageKeys = {
   runs: "prudent.runs"
 };
 
+const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+
 const navItems: Array<{ id: Page; label: string; icon: typeof Activity }> = [
   { id: "dashboard", label: "Dashboard", icon: Activity },
   { id: "tests", label: "Tests", icon: ClipboardList },
@@ -106,6 +108,7 @@ function App() {
   const [groupFilter, setGroupFilter] = useState<SuiteType | "ALL">("ALL");
   const [browser, setBrowser] = useState<RunRecord["browser"]>("chromium");
   const [headless, setHeadless] = useState(true);
+  const [runningTestId, setRunningTestId] = useState("");
 
   const selectedTest = tests.find((test) => test.id === selectedTestId) ?? tests[0];
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
@@ -143,6 +146,7 @@ function App() {
       id: uid("tc"),
       title: "New no-code test",
       project: "Prudent Portal",
+      baseUrl: "https://example.com",
       groupType: "CUSTOM",
       priority: "MEDIUM",
       status: "DRAFT",
@@ -211,11 +215,13 @@ function App() {
     }
   }
 
-  function runTest(test: TestCase, forcedStatus?: RunRecord["status"]) {
+  function createDemoRun(test: TestCase, forcedStatus?: RunRecord["status"], fallbackError?: string): RunRecord {
     const status = forcedStatus ?? (test.title.toLowerCase().includes("invoice") ? "FAILED" : "PASSED");
     const failedStep = status === "FAILED" ? test.steps[test.steps.length - 1] : undefined;
-    const run: RunRecord = {
-      id: uid("run"),
+    const runId = uid("run");
+
+    return {
+      id: runId,
       testCaseId: test.id,
       testTitle: test.title,
       suiteName: test.groupType === "CUSTOM" ? "Custom Test Suite" : `${test.groupType[0]}${test.groupType.slice(1).toLowerCase()} Test`,
@@ -245,18 +251,127 @@ function App() {
           message:
             stepStatus === "FAILED"
               ? `Could not complete ${step.actionType} using ${step.locatorType || "locator"}=${step.locatorValue || "value"}`
-              : `${step.actionType} completed`
+              : `${step.actionType} completed`,
+          screenshot: `artifacts/runs/${runId}/screenshots/step-${String(step.stepNumber).padStart(3, "0")}-${stepStatus.toLowerCase()}.png`
         };
       }),
       failedStepId: failedStep?.id,
-      error: status === "FAILED" ? `Timeout waiting for ${failedStep?.locatorType || "locator"}=${failedStep?.locatorValue || "value"}` : undefined,
-      screenshot: status === "FAILED" ? `artifacts/runs/${uid("run")}/failed-step-${failedStep?.stepNumber}.png` : undefined,
+      screenshot: status === "FAILED" ? `artifacts/runs/${runId}/screenshots/step-${String(failedStep?.stepNumber ?? 0).padStart(3, "0")}-failed.png` : undefined,
       trace: status === "FAILED" ? "artifacts/runs/latest/trace.zip" : undefined,
-      video: status === "FAILED" ? "artifacts/runs/latest/videos/page.webm" : undefined
+      video: status === "FAILED" ? "artifacts/runs/latest/videos/page.webm" : undefined,
+      error: fallbackError ?? (status === "FAILED" ? `Timeout waiting for ${failedStep?.locatorType || "locator"}=${failedStep?.locatorValue || "value"}` : undefined)
     };
-    setRuns((current) => [run, ...current]);
-    setSelectedRunId(run.id);
-    setPage(status === "FAILED" ? "debug" : "runs");
+  }
+
+  async function runTest(test: TestCase, forcedStatus?: RunRecord["status"]) {
+    if (runningTestId) return;
+
+    if (forcedStatus) {
+      const demoRun = createDemoRun(test, forcedStatus);
+      setRuns((current) => [demoRun, ...current]);
+      setSelectedRunId(demoRun.id);
+      setPage(demoRun.status === "FAILED" ? "debug" : "runs");
+      return;
+    }
+
+    setRunningTestId(test.id);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/local-runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          testCase: {
+            title: test.title,
+            baseUrl: test.baseUrl || "",
+            steps: test.steps.map((step) => ({
+              id: step.id,
+              stepNumber: step.stepNumber,
+              actionType: step.actionType,
+              locatorType: step.locatorType || undefined,
+              locatorValue: step.locatorValue || undefined,
+              inputValue: step.inputValue || undefined,
+              expectedResult: step.expectedResult || undefined,
+              waitMs: step.waitMs === "" ? undefined : step.waitMs,
+              timeoutMs: step.timeoutMs === "" ? undefined : step.timeoutMs
+            }))
+          },
+          options: {
+            browser,
+            headless,
+            environment: "qa",
+            screenshots: true,
+            trace: true,
+            video: false
+          }
+        })
+      });
+
+      const payload = await response.json();
+      if (!payload.data) {
+        throw new Error(payload.error?.message ?? "Local Playwright run did not return a result");
+      }
+
+      const result = payload.data;
+      const failedStep = result.stepResults?.find((step: { status: string }) => step.status === "FAILED");
+      const run: RunRecord = {
+        id: result.id,
+        testCaseId: test.id,
+        testTitle: test.title,
+        suiteName: test.groupType === "CUSTOM" ? "Custom Test Suite" : `${test.groupType[0]}${test.groupType.slice(1).toLowerCase()} Test`,
+        status: result.status,
+        executionMode: "LOCAL_PLAYWRIGHT",
+        browser: result.browser,
+        environment: result.environment,
+        durationMs: result.durationMs,
+        startedAt: result.startedAt,
+        stepResults: result.stepResults.map(
+          (step: {
+            stepId?: string;
+            stepNumber: number;
+            actionType: ActionType;
+            locatorType?: LocatorType | "";
+            locatorValue?: string;
+            expectedResult?: string;
+            status: RunRecord["status"];
+            durationMs: number;
+            message: string;
+            error?: string;
+            screenshot?: string;
+          }) => ({
+            stepId: step.stepId ?? `${result.id}-${step.stepNumber}`,
+            stepNumber: step.stepNumber,
+            actionType: step.actionType,
+            locatorType: step.locatorType ?? "",
+            locatorValue: step.locatorValue ?? "",
+            expectedResult: step.expectedResult ?? "",
+            status: step.status,
+            durationMs: step.durationMs,
+            message: step.error ? `${step.message}: ${step.error}` : step.message,
+            screenshot: step.screenshot
+          })
+        ),
+        failedStepId: failedStep?.stepId,
+        error: failedStep?.error,
+        screenshot: failedStep?.screenshot,
+        trace: `${result.artifactBaseUrl}/trace.zip`
+      };
+
+      setRuns((current) => [run, ...current]);
+      setSelectedRunId(run.id);
+      setPage(run.status === "FAILED" ? "debug" : "runs");
+    } catch (error) {
+      const fallbackRun = createDemoRun(
+        test,
+        undefined,
+        `Local Playwright API was unavailable, so this result used UI demo mode. ${error instanceof Error ? error.message : ""}`
+      );
+      setRuns((current) => [fallbackRun, ...current]);
+      setSelectedRunId(fallbackRun.id);
+      setPage(fallbackRun.status === "FAILED" ? "debug" : "runs");
+    } finally {
+      setRunningTestId("");
+    }
   }
 
   function toggleSuiteTest(suiteId: string, testId: string) {
@@ -365,7 +480,7 @@ function App() {
                 <td>{test.steps.length}</td>
                 <td>{formatDate(test.updatedAt)}</td>
                 <td className="actions">
-                  <button className="icon-button" title="Run" onClick={() => runTest(test)}><Play size={17} /></button>
+                  <button className="icon-button" title="Run" disabled={Boolean(runningTestId)} onClick={() => runTest(test)}><Play size={17} /></button>
                   <button className="icon-button" title="Duplicate" onClick={() => duplicateTest(test)}><Copy size={17} /></button>
                   <button className="icon-button danger-icon" title="Delete" onClick={() => deleteTest(test.id)}><Trash2 size={17} /></button>
                 </td>
@@ -388,6 +503,7 @@ function App() {
           <div className="form-grid">
             <label>Test name<input value={selectedTest.title} onChange={(event) => updateSelectedTest({ title: event.target.value })} /></label>
             <label>Project<input value={selectedTest.project} onChange={(event) => updateSelectedTest({ project: event.target.value })} /></label>
+            <label>Base URL<input value={selectedTest.baseUrl ?? ""} onChange={(event) => updateSelectedTest({ baseUrl: event.target.value })} /></label>
             <label>Group<select value={selectedTest.groupType} onChange={(event) => updateSelectedTest({ groupType: event.target.value as SuiteType })}>{suiteTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
             <label>Priority<select value={selectedTest.priority} onChange={(event) => updateSelectedTest({ priority: event.target.value as TestCase["priority"] })}>{["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((type) => <option key={type}>{type}</option>)}</select></label>
             <label>Status<select value={selectedTest.status} onChange={(event) => updateSelectedTest({ status: event.target.value as TestCase["status"] })}>{["DRAFT", "READY", "ARCHIVED"].map((type) => <option key={type}>{type}</option>)}</select></label>
@@ -396,7 +512,7 @@ function App() {
           <div className="run-options">
             <label>Browser<select value={browser} onChange={(event) => setBrowser(event.target.value as RunRecord["browser"])}>{["chromium", "chrome", "firefox", "webkit"].map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="check"><input type="checkbox" checked={headless} onChange={(event) => setHeadless(event.target.checked)} /> Headless</label>
-            <button className="primary" onClick={() => runTest(selectedTest)}><Play size={18} /> Run now</button>
+            <button className="primary" disabled={runningTestId === selectedTest.id} onClick={() => runTest(selectedTest)}><Play size={18} /> {runningTestId === selectedTest.id ? "Running" : "Run now"}</button>
             <button className="secondary"><Save size={18} /> Save</button>
           </div>
         </section>
@@ -491,7 +607,7 @@ function App() {
 
         <div className="step-results">
           <div className="step-results-head">
-            <span>#</span><span>Action</span><span>Locator</span><span>Expected</span><span>Status</span><span>Duration</span><span>Message</span>
+            <span>#</span><span>Action</span><span>Locator</span><span>Expected</span><span>Status</span><span>Duration</span><span>Screenshot</span><span>Message</span>
           </div>
           {run.stepResults?.length ? (
             run.stepResults.map((step) => (
@@ -502,6 +618,13 @@ function App() {
                 <span>{step.expectedResult || "-"}</span>
                 <span><StatusBadge status={step.status} /></span>
                 <span>{formatMs(step.durationMs)}</span>
+                <span>
+                  {step.screenshot ? (
+                    <a className="text-button" href={step.screenshot} target="_blank" rel="noreferrer" title={step.screenshot}>
+                      View evidence
+                    </a>
+                  ) : "-"}
+                </span>
                 <span>{step.message}</span>
               </div>
             ))

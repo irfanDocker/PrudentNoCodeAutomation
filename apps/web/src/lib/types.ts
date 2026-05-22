@@ -29,6 +29,7 @@ export interface TestCase {
   id: string;
   title: string;
   project: string;
+  baseUrl?: string;
   groupType: SuiteType;
   priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   status: "DRAFT" | "READY" | "ARCHIVED";
@@ -50,7 +51,7 @@ export interface RunRecord {
   testTitle: string;
   suiteName: string;
   status: RunStatus;
-  executionMode?: "UI_DEMO" | "PLAYWRIGHT_API";
+  executionMode?: "UI_DEMO" | "LOCAL_PLAYWRIGHT" | "PLAYWRIGHT_API";
   browser: "chromium" | "chrome" | "firefox" | "webkit";
   environment: string;
   durationMs: number;
@@ -73,4 +74,5 @@ export interface RunStepResult {
   status: RunStatus;
   durationMs: number;
   message: string;
+  screenshot?: string;
 }

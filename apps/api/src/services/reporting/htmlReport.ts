@@ -44,6 +44,7 @@ export async function writeHtmlReport(reportDir: string, input: HtmlReportInput)
           <td>${escapeHtml(step.status)}</td>
           <td>${escapeHtml(step.durationMs ?? "")}</td>
           <td>${escapeHtml(step.message ?? step.error ?? "")}</td>
+          <td>${step.screenshotPath ? `<a href="${escapeHtml(step.screenshotPath)}">Screenshot</a>` : ""}</td>
         </tr>`
     )
     .join("\n");
@@ -81,7 +82,7 @@ export async function writeHtmlReport(reportDir: string, input: HtmlReportInput)
       </dl>
       <table>
         <thead>
-          <tr><th>#</th><th>Action</th><th>Status</th><th>ms</th><th>Message</th></tr>
+          <tr><th>#</th><th>Action</th><th>Status</th><th>ms</th><th>Message</th><th>Screenshot</th></tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
@@ -93,4 +94,3 @@ export async function writeHtmlReport(reportDir: string, input: HtmlReportInput)
   await fs.writeFile(filePath, html, "utf8");
   return filePath;
 }
-

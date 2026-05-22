@@ -20,6 +20,7 @@ export const initialTests: TestCase[] = [
     id: "tc-login-001",
     title: "Valid user can sign in",
     project: "Prudent Portal",
+    baseUrl: "https://example.com",
     groupType: "SMOKE",
     priority: "CRITICAL",
     status: "READY",
@@ -65,6 +66,7 @@ export const initialTests: TestCase[] = [
     id: "tc-checkout-014",
     title: "Guest can download invoice",
     project: "Commerce",
+    baseUrl: "https://example.com",
     groupType: "REGRESSION",
     priority: "HIGH",
     status: "READY",
@@ -99,6 +101,7 @@ export const initialTests: TestCase[] = [
     id: "tc-profile-009",
     title: "Profile phone number validation",
     project: "Prudent Portal",
+    baseUrl: "https://example.com",
     groupType: "SPRINT",
     priority: "MEDIUM",
     status: "DRAFT",
@@ -177,4 +180,3 @@ export const initialRuns: RunRecord[] = [
     startedAt: "2026-05-20T16:47:00.000Z"
   }
 ];
-
