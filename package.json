@@ -1,0 +1,31 @@
+{
+  "name": "prudent-no-code-automation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Enterprise no-code Playwright automation platform for manual QA teams.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm-run-all --parallel dev:api dev:web",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build": "npm --workspaces --if-present run build",
+    "typecheck": "npm --workspaces --if-present run typecheck",
+    "lint": "npm --workspaces --if-present run lint",
+    "test": "npm --workspaces --if-present run test",
+    "db:generate": "npm --workspace apps/api run db:generate",
+    "db:migrate": "npm --workspace apps/api run db:migrate",
+    "db:seed": "npm --workspace apps/api run db:seed",
+    "ci:smoke": "npm --workspace apps/api run cli -- run-suite --suite \"Smoke Test\" --browser chromium --headless true"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  }
+}
+

@@ -1,0 +1,15 @@
+image: mcr.microsoft.com/playwright:v1.49.1-jammy
+
+stages:
+  - test
+
+prudent_smoke:
+  stage: test
+  script:
+    - npm ci
+    - npm --workspace apps/api run cli -- run-suite --suite "Smoke Test" --browser chromium --headless true
+  artifacts:
+    when: always
+    paths:
+      - artifacts/
+

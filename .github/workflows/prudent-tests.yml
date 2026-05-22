@@ -1,0 +1,41 @@
+name: Prudent No-Code Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Suite name
+        required: true
+        default: Smoke Test
+      browser:
+        description: Browser
+        required: true
+        default: chromium
+  push:
+    branches:
+      - main
+
+jobs:
+  prudent-tests:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.49.1-jammy
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm --workspace apps/api run cli -- run-suite --suite "${{ github.event.inputs.suite || 'Smoke Test' }}" --browser "${{ github.event.inputs.browser || 'chromium' }}" --headless true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prudent-artifacts
+          path: artifacts/
+

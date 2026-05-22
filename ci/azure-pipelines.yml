@@ -1,0 +1,24 @@
+trigger:
+  - main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.x'
+
+  - script: npm ci
+    displayName: Install dependencies
+
+  - script: npx playwright install --with-deps
+    displayName: Install Playwright browsers
+
+  - script: npm --workspace apps/api run cli -- run-suite --suite "Smoke Test" --browser chromium --headless true
+    displayName: Run Prudent smoke suite
+
+  - publish: artifacts
+    artifact: prudent-artifacts
+    condition: always()
+

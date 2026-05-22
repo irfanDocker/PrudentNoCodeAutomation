@@ -1,0 +1,37 @@
+services:
+  mysql:
+    image: mariadb:11.4
+    container_name: prudent-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: prudent_automation
+      MARIADB_USER: prudent
+      MARIADB_PASSWORD: prudent_password
+      MARIADB_ROOT_PASSWORD: root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - prudent-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phpmyadmin:
+    image: phpmyadmin:5
+    container_name: prudent-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: prudent
+      PMA_PASSWORD: prudent_password
+    ports:
+      - "8080:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  prudent-db:
+

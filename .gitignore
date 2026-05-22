@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.DS_Store
+coverage/
+playwright-report/
+test-results/
+artifacts/
+*.log
+apps/api/prisma/migrations/
+

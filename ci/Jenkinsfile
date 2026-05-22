@@ -1,0 +1,29 @@
+pipeline {
+  agent any
+
+  tools {
+    nodejs 'Node 20'
+  }
+
+  stages {
+    stage('Install') {
+      steps {
+        sh 'npm ci'
+        sh 'npx playwright install --with-deps'
+      }
+    }
+
+    stage('Run Prudent Suite') {
+      steps {
+        sh 'npm --workspace apps/api run cli -- run-suite --suite "Smoke Test" --browser chromium --headless true'
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'artifacts/**/*', allowEmptyArchive: true
+    }
+  }
+}
+

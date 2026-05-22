@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  QA_MANAGER
+  TESTER
+  VIEWER
+}
+
+enum SuiteType {
+  SMOKE
+  REGRESSION
+  RELEASE
+  SPRINT
+  CUSTOM
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TestCaseStatus {
+  DRAFT
+  READY
+  ARCHIVED
+}
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  PASSED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum LogLevel {
+  debug
+  info
+  warn
+  error
+}
+
+enum AttachmentType {
+  SCREENSHOT
+  VIDEO
+  TRACE
+  HTML_REPORT
+  PDF_REPORT
+  CSV_REPORT
+  DOWNLOAD
+  OTHER
+}
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  name            String
+  passwordHash    String     @map("password_hash")
+  role            Role       @default(TESTER)
+  createdTestCases TestCase[] @relation("CreatedTestCases")
+  updatedTestCases TestCase[] @relation("UpdatedTestCases")
+  suites          TestSuite[]
+  runs            TestRun[]
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Project {
+  id           String      @id @default(cuid())
+  name         String
+  projectKey   String      @unique @map("project_key")
+  baseUrl      String?     @map("base_url") @db.VarChar(500)
+  environments Json?
+  testCases    TestCase[]
+  suites       TestSuite[]
+  runs         TestRun[]
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@map("projects")
+}
+
+model TestCase {
+  id          String         @id @default(cuid())
+  projectId   String         @map("project_id")
+  project     Project        @relation(fields: [projectId], references: [id])
+  title       String
+  description String?        @db.Text
+  groupType   SuiteType      @default(CUSTOM) @map("group_type")
+  priority    Priority       @default(MEDIUM)
+  status      TestCaseStatus @default(DRAFT)
+  tags        Json?
+  createdById String?        @map("created_by_id")
+  createdBy   User?          @relation("CreatedTestCases", fields: [createdById], references: [id])
+  updatedById String?        @map("updated_by_id")
+  updatedBy   User?          @relation("UpdatedTestCases", fields: [updatedById], references: [id])
+  steps       TestStep[]
+  suiteLinks  TestSuiteMapping[]
+  runs        TestRun[]
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([projectId, groupType])
+  @@map("test_cases")
+}
+
+model TestStep {
+  id             String       @id @default(cuid())
+  testCaseId     String       @map("test_case_id")
+  testCase       TestCase     @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  stepNumber     Int          @map("step_number")
+  actionType     String       @map("action_type") @db.VarChar(50)
+  locatorType    String?      @map("locator_type") @db.VarChar(50)
+  locatorValue   String?      @map("locator_value") @db.Text
+  inputValue     String?      @map("input_value") @db.Text
+  expectedResult String?      @map("expected_result") @db.Text
+  waitMs         Int?         @map("wait_ms")
+  timeoutMs      Int?         @map("timeout_ms")
+  metadata       Json?
+  results        TestStepResult[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([testCaseId, stepNumber])
+  @@map("test_steps")
+}
+
+model TestSuite {
+  id          String       @id @default(cuid())
+  projectId   String       @map("project_id")
+  project     Project      @relation(fields: [projectId], references: [id])
+  name        String
+  suiteType   SuiteType    @default(CUSTOM) @map("suite_type")
+  description String?      @db.Text
+  createdById String?      @map("created_by_id")
+  createdBy   User?        @relation(fields: [createdById], references: [id])
+  testCases   TestSuiteMapping[]
+  runs        TestRun[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@unique([projectId, name])
+  @@map("test_suites")
+}
+
+model TestSuiteMapping {
+  testSuiteId String    @map("test_suite_id")
+  testSuite   TestSuite @relation(fields: [testSuiteId], references: [id], onDelete: Cascade)
+  testCaseId  String    @map("test_case_id")
+  testCase    TestCase  @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  sortOrder   Int       @default(0) @map("sort_order")
+
+  @@id([testSuiteId, testCaseId])
+  @@map("test_suite_mapping")
+}
+
+model TestRun {
+  id           String       @id @default(cuid())
+  projectId    String       @map("project_id")
+  project      Project      @relation(fields: [projectId], references: [id])
+  testSuiteId  String?      @map("test_suite_id")
+  testSuite    TestSuite?   @relation(fields: [testSuiteId], references: [id])
+  testCaseId   String?      @map("test_case_id")
+  testCase     TestCase?    @relation(fields: [testCaseId], references: [id])
+  status       RunStatus    @default(QUEUED)
+  browser      String       @default("chromium") @db.VarChar(30)
+  headless     Boolean      @default(true)
+  environment  String       @default("qa") @db.VarChar(100)
+  baseUrl      String?      @map("base_url") @db.VarChar(500)
+  triggeredById String?     @map("triggered_by_id")
+  triggeredBy  User?        @relation(fields: [triggeredById], references: [id])
+  startedAt    DateTime?    @map("started_at")
+  endedAt      DateTime?    @map("ended_at")
+  durationMs   Int?         @map("duration_ms")
+  summary      Json?
+  stepResults  TestStepResult[]
+  logs         Log[]
+  attachments  Attachment[]
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  @@index([projectId, status, environment])
+  @@map("test_runs")
+}
+
+model TestStepResult {
+  id             String       @id @default(cuid())
+  testRunId      String       @map("test_run_id")
+  testRun        TestRun      @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  testStepId     String?      @map("test_step_id")
+  testStep       TestStep?    @relation(fields: [testStepId], references: [id])
+  stepNumber     Int          @map("step_number")
+  status         RunStatus
+  actionType     String       @map("action_type") @db.VarChar(50)
+  locatorType    String?      @map("locator_type") @db.VarChar(50)
+  locatorValue   String?      @map("locator_value") @db.Text
+  message        String?      @db.Text
+  error          String?      @db.Text
+  screenshotPath String?      @map("screenshot_path") @db.VarChar(1000)
+  tracePath      String?      @map("trace_path") @db.VarChar(1000)
+  videoPath      String?      @map("video_path") @db.VarChar(1000)
+  durationMs     Int?         @map("duration_ms")
+  startedAt      DateTime?    @map("started_at")
+  endedAt        DateTime?    @map("ended_at")
+  logs           Log[]
+  attachments    Attachment[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([testRunId, status])
+  @@map("test_step_results")
+}
+
+model Log {
+  id           String          @id @default(cuid())
+  testRunId    String          @map("test_run_id")
+  testRun      TestRun         @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  stepResultId String?         @map("step_result_id")
+  stepResult   TestStepResult? @relation(fields: [stepResultId], references: [id])
+  level        LogLevel        @default(info)
+  message      String          @db.Text
+  metadata     Json?
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  @@index([testRunId, level])
+  @@map("logs")
+}
+
+model Attachment {
+  id           String          @id @default(cuid())
+  testRunId    String          @map("test_run_id")
+  testRun      TestRun         @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  stepResultId String?         @map("step_result_id")
+  stepResult   TestStepResult? @relation(fields: [stepResultId], references: [id])
+  type         AttachmentType
+  fileName     String          @map("file_name")
+  filePath     String          @map("file_path") @db.VarChar(1000)
+  mimeType     String?         @map("mime_type") @db.VarChar(150)
+  sizeBytes    Int?            @map("size_bytes")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  @@index([testRunId, type])
+  @@map("attachments")
+}
+
