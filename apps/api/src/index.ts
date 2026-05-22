@@ -17,8 +17,21 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 
+const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1):517\d$/;
+const allowedOrigins = new Set(env.WEB_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean));
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
-app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin) || (env.NODE_ENV !== "production" && localDevOriginPattern.test(origin))) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`Origin ${origin} is not allowed by CORS`));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 app.use("/artifacts", express.static(path.resolve(env.ARTIFACT_DIR)));
