@@ -22,6 +22,15 @@ import { actionLabels, actionTypes, initialRuns, initialSuites, initialTests, lo
 import type { ActionType, LocatorType, RunRecord, SuiteType, TestCase, TestStep, TestSuite } from "./lib/types";
 
 type Page = "dashboard" | "tests" | "builder" | "recorder" | "suites" | "runs" | "debug" | "reports";
+type ActionField = "locatorType" | "locatorValue" | "inputValue" | "expectedResult" | "waitMs";
+
+interface ActionFieldConfig {
+  fields: ActionField[];
+  labels: Partial<Record<ActionField, string>>;
+  placeholders?: Partial<Record<ActionField, string>>;
+  multiline?: ActionField[];
+  emptyText?: string;
+}
 
 const storageKeys = {
   tests: "prudent.tests",
@@ -41,6 +50,116 @@ const navItems: Array<{ id: Page; label: string; icon: typeof Activity }> = [
   { id: "debug", label: "Debug", icon: Bug },
   { id: "reports", label: "Reports", icon: FileText }
 ];
+
+const defaultFieldLabels: Record<ActionField, string> = {
+  locatorType: "Locator type",
+  locatorValue: "Locator value",
+  inputValue: "Input",
+  expectedResult: "Expected result",
+  waitMs: "Wait time"
+};
+
+const actionFieldConfigs: Record<ActionType, ActionFieldConfig> = {
+  goto: {
+    fields: ["inputValue"],
+    labels: { inputValue: "URL or path" },
+    placeholders: { inputValue: "https://example.com/login or /login" }
+  },
+  click: {
+    fields: ["locatorType", "locatorValue"],
+    labels: { locatorValue: "Element locator" },
+    placeholders: { locatorValue: "button:Sign in, #submit, or Login" }
+  },
+  type: {
+    fields: ["locatorType", "locatorValue", "inputValue"],
+    labels: { locatorValue: "Input field locator", inputValue: "Text to type" }
+  },
+  select: {
+    fields: ["locatorType", "locatorValue", "inputValue"],
+    labels: { locatorValue: "Dropdown locator", inputValue: "Option label or value" }
+  },
+  select_by_value: {
+    fields: ["locatorType", "locatorValue", "inputValue"],
+    labels: { locatorValue: "Dropdown locator", inputValue: "Option value" }
+  },
+  verify_text: {
+    fields: ["expectedResult"],
+    labels: { expectedResult: "Expected visible text" }
+  },
+  wait: {
+    fields: ["waitMs"],
+    labels: { waitMs: "Wait time (ms)" },
+    placeholders: { waitMs: "1000" }
+  },
+  upload_file: {
+    fields: ["locatorType", "locatorValue", "inputValue"],
+    labels: { locatorValue: "File input locator", inputValue: "File path" }
+  },
+  download_file: {
+    fields: ["locatorType", "locatorValue"],
+    labels: { locatorValue: "Download button/link locator" }
+  },
+  screenshot: {
+    fields: [],
+    labels: {},
+    emptyText: "No additional input needed."
+  },
+  get_page_title: {
+    fields: ["expectedResult"],
+    labels: { expectedResult: "Expected page title contains" }
+  },
+  is_disabled: {
+    fields: ["locatorType", "locatorValue"],
+    labels: { locatorValue: "Disabled element locator" }
+  },
+  is_enabled: {
+    fields: ["locatorType", "locatorValue"],
+    labels: { locatorValue: "Enabled element locator" }
+  },
+  string_contains: {
+    fields: ["inputValue", "expectedResult"],
+    labels: { inputValue: "Source text", expectedResult: "Text to find" }
+  },
+  switch_to_frame: {
+    fields: ["locatorType", "locatorValue"],
+    labels: { locatorType: "Frame selector type", locatorValue: "Frame selector" },
+    placeholders: { locatorValue: "iframe[name='checkout'] or main" }
+  },
+  database_connection: {
+    fields: ["inputValue"],
+    labels: { inputValue: "Database URL" },
+    placeholders: { inputValue: "mysql://user:pass@host:3306/database" }
+  },
+  api_call: {
+    fields: ["inputValue", "expectedResult"],
+    labels: { inputValue: "API URL", expectedResult: "Expected status or response text" },
+    placeholders: { inputValue: "https://api.example.com/health", expectedResult: "200 or healthy" }
+  },
+  schema_validation: {
+    fields: ["inputValue", "expectedResult"],
+    labels: { inputValue: "JSON response/body", expectedResult: "Schema JSON" },
+    multiline: ["inputValue", "expectedResult"]
+  },
+  json_validation: {
+    fields: ["inputValue", "expectedResult"],
+    labels: { inputValue: "JSON response/body", expectedResult: "Expected JSON subset" },
+    multiline: ["inputValue", "expectedResult"]
+  }
+};
+
+function normalizeActionValues<T extends Omit<TestStep, "id" | "stepNumber"> | TestStep>(step: T): T {
+  const fields = new Set(actionFieldConfigs[step.actionType].fields);
+
+  return {
+    ...step,
+    locatorType: fields.has("locatorType") ? step.locatorType || "css" : "",
+    locatorValue: fields.has("locatorValue") ? step.locatorValue : "",
+    inputValue: fields.has("inputValue") ? step.inputValue : "",
+    expectedResult: fields.has("expectedResult") ? step.expectedResult : "",
+    waitMs: fields.has("waitMs") ? step.waitMs || 1000 : "",
+    timeoutMs: step.timeoutMs || 10000
+  };
+}
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -196,6 +315,14 @@ function App() {
     });
   }
 
+  function updateStepAction(step: TestStep, actionType: ActionType) {
+    updateStep(step.id, normalizeActionValues({ ...step, actionType }));
+  }
+
+  function updateRecorderAction(actionType: ActionType) {
+    setRecorderDraft((current) => normalizeActionValues({ ...current, actionType }));
+  }
+
   function addStep() {
     if (!selectedTest) return;
     updateSelectedTest({
@@ -242,16 +369,116 @@ function App() {
     const step: TestStep = {
       id: uid("step"),
       stepNumber: selectedTest.steps.length + 1,
-      ...recorderDraft
+      ...normalizeActionValues(recorderDraft)
     };
 
     updateSelectedTest({ steps: [...selectedTest.steps, step] });
-    setRecorderDraft((current) => ({
-      ...current,
-      locatorValue: "",
-      inputValue: "",
-      expectedResult: ""
-    }));
+    setRecorderDraft((current) =>
+      normalizeActionValues({
+        ...current,
+        locatorValue: "",
+        inputValue: "",
+        expectedResult: "",
+        waitMs: ""
+      })
+    );
+  }
+
+  function renderActionField(
+    actionType: ActionType,
+    field: ActionField,
+    value: string | number,
+    onChange: (field: ActionField, value: string | number) => void
+  ) {
+    const config = actionFieldConfigs[actionType];
+    const label = config.labels[field] ?? defaultFieldLabels[field];
+    const placeholder = config.placeholders?.[field] ?? "";
+
+    if (field === "locatorType") {
+      return (
+        <label key={field}>
+          {label}
+          <select value={value} onChange={(event) => onChange(field, event.target.value as LocatorType | "")}>
+            {locatorTypes.map((type) => <option key={type}>{type}</option>)}
+          </select>
+        </label>
+      );
+    }
+
+    if (field === "waitMs") {
+      return (
+        <label key={field}>
+          {label}
+          <input
+            type="number"
+            min="0"
+            placeholder={placeholder}
+            value={value}
+            onChange={(event) => onChange(field, event.target.value ? Number(event.target.value) : "")}
+          />
+        </label>
+      );
+    }
+
+    if (config.multiline?.includes(field)) {
+      return (
+        <label key={field} className="wide-field">
+          {label}
+          <textarea
+            placeholder={placeholder}
+            value={value}
+            rows={3}
+            onChange={(event) => onChange(field, event.target.value)}
+          />
+        </label>
+      );
+    }
+
+    return (
+      <label key={field}>
+        {label}
+        <input placeholder={placeholder} value={value} onChange={(event) => onChange(field, event.target.value)} />
+      </label>
+    );
+  }
+
+  function renderStepActionFields(step: TestStep) {
+    const config = actionFieldConfigs[step.actionType];
+
+    if (!config.fields.length) {
+      return <span className="no-action-fields">{config.emptyText ?? "No additional input needed."}</span>;
+    }
+
+    return config.fields.map((field) =>
+      renderActionField(step.actionType, field, step[field], (fieldName, value) => updateStep(step.id, { [fieldName]: value }))
+    );
+  }
+
+  function renderRecorderActionFields() {
+    const config = actionFieldConfigs[recorderDraft.actionType];
+
+    if (!config.fields.length) {
+      return <span className="no-action-fields wide-field">{config.emptyText ?? "No additional input needed."}</span>;
+    }
+
+    return config.fields.map((field) =>
+      renderActionField(recorderDraft.actionType, field, recorderDraft[field], (fieldName, value) =>
+        setRecorderDraft((current) => ({ ...current, [fieldName]: value }))
+      )
+    );
+  }
+
+  function stepDetailText(step: TestStep) {
+    const config = actionFieldConfigs[step.actionType];
+    const details = config.fields
+      .map((field) => {
+        const value = step[field];
+        if (value === "") return "";
+        return `${config.labels[field] ?? defaultFieldLabels[field]}: ${value}`;
+      })
+      .filter(Boolean);
+
+    return details.join(" · ") || config.emptyText || "-";
   }
 
   function createDemoRun(test: TestCase, forcedStatus?: RunRecord["status"], fallbackError?: string): RunRecord {
@@ -563,22 +790,20 @@ function App() {
             <button className="secondary" onClick={addStep}><Plus size={18} /> Add step</button>
           </div>
           <div className="step-table">
-            <div className="step-head">
-              <span>#</span><span>Action</span><span>Locator type</span><span>Locator value</span><span>Input</span><span>Expected</span><span>Wait</span><span>Timeout</span><span></span>
-            </div>
             {selectedTest.steps.map((step) => (
               <div className="step-row" key={step.id}>
-                <strong>{step.stepNumber}</strong>
-                <select value={step.actionType} onChange={(event) => updateStep(step.id, { actionType: event.target.value as ActionType })}>{actionTypes.map((type) => <option key={type} value={type}>{actionLabels[type]}</option>)}</select>
-                <select value={step.locatorType} onChange={(event) => updateStep(step.id, { locatorType: event.target.value as LocatorType | "" })}>
-                  <option value="">none</option>
-                  {locatorTypes.map((type) => <option key={type}>{type}</option>)}
-                </select>
-                <input value={step.locatorValue} onChange={(event) => updateStep(step.id, { locatorValue: event.target.value })} />
-                <input value={step.inputValue} onChange={(event) => updateStep(step.id, { inputValue: event.target.value })} />
-                <input value={step.expectedResult} onChange={(event) => updateStep(step.id, { expectedResult: event.target.value })} />
-                <input type="number" value={step.waitMs} onChange={(event) => updateStep(step.id, { waitMs: event.target.value ? Number(event.target.value) : "" })} />
-                <input type="number" value={step.timeoutMs} onChange={(event) => updateStep(step.id, { timeoutMs: event.target.value ? Number(event.target.value) : "" })} />
+                <div className="step-meta">
+                  <strong>{step.stepNumber}</strong>
+                  <label>
+                    Action
+                    <select value={step.actionType} onChange={(event) => updateStepAction(step, event.target.value as ActionType)}>
+                      {actionTypes.map((type) => <option key={type} value={type}>{actionLabels[type]}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="step-fields">
+                  {renderStepActionFields(step)}
+                </div>
                 <button className="icon-button danger-icon" title="Remove step" onClick={() => deleteStep(step.id)}><Trash2 size={16} /></button>
               </div>
             ))}
@@ -608,15 +833,8 @@ function App() {
           <div className="form-grid">
             <label>Test<input value={selectedTest.title} onChange={(event) => updateSelectedTest({ title: event.target.value })} /></label>
             <label>Base URL<input value={selectedTest.baseUrl ?? ""} onChange={(event) => updateSelectedTest({ baseUrl: event.target.value })} /></label>
-            <label>Action<select value={recorderDraft.actionType} onChange={(event) => setRecorderDraft((current) => ({ ...current, actionType: event.target.value as ActionType }))}>{actionTypes.map((type) => <option key={type} value={type}>{actionLabels[type]}</option>)}</select></label>
-            <label>Locator type<select value={recorderDraft.locatorType} onChange={(event) => setRecorderDraft((current) => ({ ...current, locatorType: event.target.value as LocatorType | "" }))}>
-              <option value="">none</option>
-              {locatorTypes.map((type) => <option key={type}>{type}</option>)}
-            </select></label>
-            <label>Locator / frame / check target<input value={recorderDraft.locatorValue} onChange={(event) => setRecorderDraft((current) => ({ ...current, locatorValue: event.target.value }))} /></label>
-            <label>Input / URL / JSON / DB URL<input value={recorderDraft.inputValue} onChange={(event) => setRecorderDraft((current) => ({ ...current, inputValue: event.target.value }))} /></label>
-            <label>Expected / schema<input value={recorderDraft.expectedResult} onChange={(event) => setRecorderDraft((current) => ({ ...current, expectedResult: event.target.value }))} /></label>
-            <label>Timeout<input type="number" value={recorderDraft.timeoutMs} onChange={(event) => setRecorderDraft((current) => ({ ...current, timeoutMs: event.target.value ? Number(event.target.value) : "" }))} /></label>
+            <label>Action<select value={recorderDraft.actionType} onChange={(event) => updateRecorderAction(event.target.value as ActionType)}>{actionTypes.map((type) => <option key={type} value={type}>{actionLabels[type]}</option>)}</select></label>
+            {renderRecorderActionFields()}
           </div>
 
           <div className="recorder-actions">
@@ -635,7 +853,7 @@ function App() {
               <div className="recorded-step" key={step.id}>
                 <strong>{step.stepNumber}</strong>
                 <span>{actionLabels[step.actionType]}</span>
-                <small>{step.locatorType ? `${step.locatorType}: ${step.locatorValue}` : step.inputValue || step.expectedResult || "-"}</small>
+                <small>{stepDetailText(step)}</small>
               </div>
             ))}
           </div>

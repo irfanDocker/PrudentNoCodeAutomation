@@ -19,7 +19,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -413,8 +414,18 @@ label {
 }
 
 label input,
-label select {
+label select,
+label textarea {
   width: 100%;
+}
+
+label textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.wide-field {
+  grid-column: 1 / -1;
 }
 
 .check {
@@ -431,28 +442,48 @@ label select {
 
 .step-table {
   display: grid;
-  min-width: 960px;
+  gap: 10px;
 }
 
-.step-head,
 .step-row {
   display: grid;
-  grid-template-columns: 44px 130px 136px minmax(180px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) 88px 96px 44px;
-  gap: 8px;
-  align-items: center;
-  min-height: 48px;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) 44px;
+  gap: 12px;
+  align-items: start;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
 }
 
-.step-head {
+.step-meta {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.step-meta strong {
+  display: inline-grid;
+  place-items: center;
+  min-height: 36px;
+  border-radius: 8px;
+  background: #edf7f5;
+  color: #176b65;
+}
+
+.step-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.no-action-fields {
+  align-self: end;
+  min-height: 36px;
+  border: 1px dashed #ccd6e2;
+  border-radius: 8px;
   color: #657384;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.step-row {
-  border-top: 1px solid #e7ecf2;
-  padding: 8px 0;
+  padding: 9px 12px;
 }
 
 .suite-grid {
@@ -739,6 +770,10 @@ label select {
     grid-template-columns: 1fr;
   }
 
+  .step-fields {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
   .debug-grid .wide {
     grid-column: auto;
   }
@@ -787,6 +822,11 @@ label select {
   .metric-grid,
   .suite-grid,
   .recorder-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .step-row,
+  .step-fields {
     grid-template-columns: 1fr;
   }
 
