@@ -462,12 +462,34 @@ label textarea {
 
 .step-row {
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) 44px;
+  grid-template-columns: 36px minmax(180px, 220px) minmax(0, 1fr) 88px;
   gap: 12px;
   align-items: start;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 12px;
+}
+
+.step-row.dragging {
+  border-color: #176b65;
+  background: #f4fbfa;
+  opacity: 0.72;
+}
+
+.drag-handle {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  min-height: 36px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #657384;
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .step-meta {
@@ -490,6 +512,11 @@ label textarea {
   display: grid;
   grid-template-columns: repeat(3, minmax(160px, 1fr));
   gap: 10px;
+}
+
+.step-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .no-action-fields {

@@ -7,6 +7,7 @@ import {
   Database,
   Download,
   FileText,
+  GripVertical,
   Layers3,
   ListFilter,
   PlugZap,
@@ -294,6 +295,10 @@ function applyTokensToStep(step: TestStep, variables: Record<string, string>): T
   };
 }
 
+function renumberSteps(steps: TestStep[]) {
+  return steps.map((step, index) => ({ ...step, stepNumber: index + 1 }));
+}
+
 function dataRowsForDataSet(dataSet: DataSet | undefined): DataRow[] {
   if (!dataSet) return [];
   if (dataSet.rows?.length) return dataSet.rows;
@@ -398,6 +403,7 @@ function App() {
   const [browser, setBrowser] = useState<RunRecord["browser"]>("chromium");
   const [headless, setHeadless] = useState(true);
   const [runningTestId, setRunningTestId] = useState("");
+  const [draggedStepId, setDraggedStepId] = useState("");
   const [recorderDraft, setRecorderDraft] = useState<Omit<TestStep, "id" | "stepNumber">>(() => emptyRecorderDraft());
 
   const selectedTest = tests.find((test) => test.id === selectedTestId) ?? tests[0];
@@ -541,12 +547,32 @@ function App() {
     });
   }
 
+  function insertStepAfter(stepId: string) {
+    if (!selectedTest) return;
+    const insertIndex = selectedTest.steps.findIndex((step) => step.id === stepId);
+    if (insertIndex === -1) return;
+
+    const nextSteps = [...selectedTest.steps];
+    nextSteps.splice(insertIndex + 1, 0, emptyStep(insertIndex + 2));
+    updateSelectedTest({ steps: renumberSteps(nextSteps) });
+  }
+
+  function reorderStep(sourceStepId: string, targetStepId: string) {
+    if (!selectedTest || sourceStepId === targetStepId) return;
+    const sourceIndex = selectedTest.steps.findIndex((step) => step.id === sourceStepId);
+    const targetIndex = selectedTest.steps.findIndex((step) => step.id === targetStepId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const nextSteps = [...selectedTest.steps];
+    const [movedStep] = nextSteps.splice(sourceIndex, 1);
+    nextSteps.splice(targetIndex, 0, movedStep);
+    updateSelectedTest({ steps: renumberSteps(nextSteps) });
+  }
+
   function deleteStep(stepId: string) {
     if (!selectedTest) return;
     updateSelectedTest({
-      steps: selectedTest.steps
-        .filter((step) => step.id !== stepId)
-        .map((step, index) => ({ ...step, stepNumber: index + 1 }))
+      steps: renumberSteps(selectedTest.steps.filter((step) => step.id !== stepId))
     });
   }
 
@@ -1345,7 +1371,32 @@ function App() {
           </div>
           <div className="step-table">
             {selectedTest.steps.map((step) => (
-              <div className="step-row" key={step.id}>
+              <div
+                className={`step-row${draggedStepId === step.id ? " dragging" : ""}`}
+                key={step.id}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const sourceStepId = event.dataTransfer.getData("text/plain") || draggedStepId;
+                  reorderStep(sourceStepId, step.id);
+                  setDraggedStepId("");
+                }}
+              >
+                <span
+                  className="drag-handle"
+                  draggable
+                  role="button"
+                  aria-label={`Drag step ${step.stepNumber}`}
+                  title="Drag to reorder"
+                  onDragStart={(event) => {
+                    setDraggedStepId(step.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", step.id);
+                  }}
+                  onDragEnd={() => setDraggedStepId("")}
+                >
+                  <GripVertical size={18} />
+                </span>
                 <div className="step-meta">
                   <strong>{step.stepNumber}</strong>
                   <label>
@@ -1358,7 +1409,10 @@ function App() {
                 <div className="step-fields">
                   {renderStepActionFields(step)}
                 </div>
-                <button className="icon-button danger-icon" title="Remove step" onClick={() => deleteStep(step.id)}><Trash2 size={16} /></button>
+                <div className="step-actions">
+                  <button className="icon-button" title="Insert step below" onClick={() => insertStepAfter(step.id)}><Plus size={16} /></button>
+                  <button className="icon-button danger-icon" title="Remove step" onClick={() => deleteStep(step.id)}><Trash2 size={16} /></button>
+                </div>
               </div>
             ))}
           </div>
