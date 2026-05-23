@@ -77,6 +77,7 @@ export const runOptionsSchema = z.object({
   trace: z.coerce.boolean().default(true),
   video: z.coerce.boolean().default(true),
   screenshots: z.coerce.boolean().default(true),
+  variables: z.record(z.string()).default({}),
   timeoutMs: z.coerce.number().int().positive().default(10000)
 });
 

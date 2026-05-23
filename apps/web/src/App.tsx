@@ -414,7 +414,16 @@ function App() {
   const selectedDataRows = dataRowsForDataSet(selectedDataSet);
   const selectedDataRow = selectedDataRows.find((row) => row.id === selectedDataRowId) ?? selectedDataRows[0];
   const selectedDataColumns = dataColumnNames(selectedDataSet);
-  const availableDataTokens = selectedDataColumns.map((column) => `{{${column}}}`);
+  const availableDataTokens = Array.from(new Set([
+    ...Object.keys(selectedEnvironment?.variables ?? {}),
+    "baseUrl",
+    "apiUrl",
+    "dbUrl",
+    "environment",
+    ...selectedDataColumns,
+    ...Object.keys(selectedDataRow?.variables ?? {}),
+    ...Object.keys(selectedScenario?.variables ?? {})
+  ])).filter(Boolean).map((column) => `{{${column}}}`);
 
   useEffect(() => {
     window.localStorage.setItem(storageKeys.tests, JSON.stringify(tests));
@@ -827,7 +836,7 @@ function App() {
           if (!token) return;
           onChange(field, `${value}${value ? " " : ""}${token}`);
         }}>
-          <option value="">Insert test data</option>
+          <option value="">Insert variable</option>
           {availableDataTokens.map((token) => <option key={token} value={token}>{token}</option>)}
         </select>
       );
@@ -989,7 +998,8 @@ function App() {
             environment: selectedEnvironment?.name ?? "qa",
             screenshots: true,
             trace: true,
-            video: true
+            video: true,
+            variables: activeRunVariables(dataRow)
           }
         })
       });

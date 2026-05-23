@@ -31,6 +31,20 @@ function durationFrom(startedAt: number) {
   return Date.now() - startedAt;
 }
 
+function resolveTokens(value: string | null | undefined, variables: Record<string, string>) {
+  if (!value) return value;
+  return value.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (match, key: string) => variables[key] ?? match);
+}
+
+function resolveStepTokens(step: TestStepInput, variables: Record<string, string>): TestStepInput {
+  return {
+    ...step,
+    locatorValue: resolveTokens(step.locatorValue, variables),
+    inputValue: resolveTokens(step.inputValue, variables),
+    expectedResult: resolveTokens(step.expectedResult, variables)
+  };
+}
+
 async function launchBrowser(browserType: BrowserType, headless: boolean): Promise<Browser> {
   if (browserType === "firefox") {
     return firefox.launch({ headless });
@@ -88,7 +102,9 @@ export async function runLocalPlaywrightTest(testCase: LocalTestCase, optionsInp
 
     const page = await context.newPage();
     const actionState = createExecutionState();
-    const orderedSteps = [...testCase.steps].sort((a, b) => a.stepNumber - b.stepNumber);
+    const orderedSteps = testCase.steps
+      .map((step) => resolveStepTokens(step, options.variables))
+      .sort((a, b) => a.stepNumber - b.stepNumber);
 
     for (const step of orderedSteps) {
       const stepStartedAt = Date.now();
