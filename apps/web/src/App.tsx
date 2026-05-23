@@ -299,6 +299,10 @@ function renumberSteps(steps: TestStep[]) {
   return steps.map((step, index) => ({ ...step, stepNumber: index + 1 }));
 }
 
+function namespacedVariables(prefix: string, variables: Record<string, string>) {
+  return Object.fromEntries(Object.entries(variables).map(([key, value]) => [`${prefix}.${key}`, value]));
+}
+
 function dataRowsForDataSet(dataSet: DataSet | undefined): DataRow[] {
   if (!dataSet) return [];
   if (dataSet.rows?.length) return dataSet.rows;
@@ -415,6 +419,10 @@ function App() {
   const selectedDataRow = selectedDataRows.find((row) => row.id === selectedDataRowId) ?? selectedDataRows[0];
   const selectedDataColumns = dataColumnNames(selectedDataSet);
   const availableDataTokens = Array.from(new Set([
+    ...Object.keys(selectedDataSet?.variables ?? {}).map((key) => `data.${key}`),
+    ...selectedDataColumns.map((key) => `data.${key}`),
+    ...Object.keys(selectedScenario?.variables ?? {}).map((key) => `scenario.${key}`),
+    ...Object.keys(selectedEnvironment?.variables ?? {}).map((key) => `env.${key}`),
     ...Object.keys(selectedEnvironment?.variables ?? {}),
     "baseUrl",
     "apiUrl",
@@ -484,15 +492,24 @@ function App() {
   const skippedRuns = runs.filter((run) => run.status === "SKIPPED").length;
 
   function activeRunVariables(dataRow = selectedDataRow) {
+    const environmentVariables = selectedEnvironment?.variables ?? {};
+    const testDataVariables = {
+      ...(selectedDataSet?.variables ?? {}),
+      ...(dataRow?.variables ?? {})
+    };
+    const scenarioVariables = selectedScenario?.variables ?? {};
+
     return {
-      ...(selectedEnvironment?.variables ?? {}),
+      ...testDataVariables,
+      ...scenarioVariables,
+      ...environmentVariables,
       baseUrl: selectedEnvironment?.baseUrl ?? "",
       apiUrl: selectedEnvironment?.apiUrl ?? "",
       dbUrl: selectedEnvironment?.dbUrl ?? "",
       environment: selectedEnvironment?.name ?? "",
-      ...(selectedDataSet?.variables ?? {}),
-      ...(dataRow?.variables ?? {}),
-      ...(selectedScenario?.variables ?? {})
+      ...namespacedVariables("data", testDataVariables),
+      ...namespacedVariables("scenario", scenarioVariables),
+      ...namespacedVariables("env", environmentVariables)
     };
   }
 
@@ -1355,8 +1372,8 @@ function App() {
         {!!availableDataTokens.length && (
           <section className="panel token-panel">
             <div className="panel-title">
-              <h2>Test data available to steps</h2>
-              <span className="badge neutral">{selectedDataSet?.name}</span>
+              <h2>Variables available to steps</h2>
+              <span className="badge neutral">{selectedEnvironment?.name} + {selectedDataSet?.name}</span>
             </div>
             <div className="token-list">
               {availableDataTokens.map((token) => <code key={token}>{token}</code>)}
