@@ -811,6 +811,64 @@ label textarea {
   grid-template-columns: repeat(4, minmax(140px, 1fr));
 }
 
+.ci-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.ci-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.ci-summary-grid > div,
+.ci-url-preview {
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.ci-summary-grid span,
+.ci-url-preview span {
+  display: block;
+  color: #657384;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.ci-summary-grid strong {
+  display: block;
+  margin: 6px 0;
+}
+
+.ci-summary-grid code,
+.ci-url-preview code {
+  display: block;
+  overflow-x: auto;
+  color: #263342;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ci-url-preview {
+  margin-top: 14px;
+}
+
+.ci-snippet pre {
+  min-height: 260px;
+  margin: 0;
+  overflow: auto;
+  border-radius: 8px;
+  background: #111827;
+  color: #e5edf6;
+  padding: 14px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .run-mode {
   min-width: 150px;
   border: 1px solid #dde3ea;
@@ -984,6 +1042,8 @@ label textarea {
 
   .metric-grid,
   .suite-grid,
+  .ci-grid,
+  .ci-summary-grid,
   .recorder-layout,
   .config-layout,
   .run-control-grid,
@@ -1052,6 +1112,8 @@ label textarea {
 
   .metric-grid,
   .suite-grid,
+  .ci-grid,
+  .ci-summary-grid,
   .recorder-layout,
   .config-layout,
   .run-control-grid,

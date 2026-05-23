@@ -53,7 +53,7 @@ import type {
   UtilityBlock
 } from "./lib/types";
 
-type Page = "dashboard" | "tests" | "builder" | "recorder" | "environments" | "testdata" | "utilities" | "suites" | "runs" | "debug" | "reports";
+type Page = "dashboard" | "tests" | "builder" | "recorder" | "environments" | "testdata" | "utilities" | "suites" | "runs" | "ci" | "debug" | "reports";
 type ActionField = "locatorType" | "locatorValue" | "inputValue" | "expectedResult" | "waitMs";
 
 interface ActionFieldConfig {
@@ -88,6 +88,7 @@ const navItems: Array<{ id: Page; label: string; icon: typeof Activity }> = [
   { id: "utilities", label: "Utilities", icon: PlugZap },
   { id: "suites", label: "Suites", icon: Layers3 },
   { id: "runs", label: "Runs", icon: Play },
+  { id: "ci", label: "CI Integration", icon: Activity },
   { id: "debug", label: "Debug", icon: Bug },
   { id: "reports", label: "Reports", icon: FileText }
 ];
@@ -1687,19 +1688,6 @@ function App() {
         <div className="run-control-grid">
           <section className="panel">
             <div className="panel-title">
-              <h2>Jenkins build</h2>
-              <button className="primary" onClick={triggerJenkinsBuild}><Play size={18} /> Queue build</button>
-            </div>
-            <div className="form-grid">
-              <label>Jenkins URL<input value={jenkinsConfig.url} onChange={(event) => setJenkinsConfig((current) => ({ ...current, url: event.target.value }))} /></label>
-              <label>Job name<input value={jenkinsConfig.jobName} onChange={(event) => setJenkinsConfig((current) => ({ ...current, jobName: event.target.value }))} /></label>
-              <label>Branch<input value={jenkinsConfig.branch} onChange={(event) => setJenkinsConfig((current) => ({ ...current, branch: event.target.value }))} /></label>
-              <label className="wide-field">Token<input value={jenkinsConfig.token} onChange={(event) => setJenkinsConfig((current) => ({ ...current, token: event.target.value }))} /></label>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-title">
               <h2>Schedules</h2>
               <button className="secondary" onClick={addSchedule}><Plus size={18} /> Add schedule</button>
             </div>
@@ -1728,6 +1716,81 @@ function App() {
             <button className="secondary" onClick={() => runs[0] && exportRun(runs[0])}><Download size={18} /> Export latest</button>
           </div>
           <RunTable runs={runs} selectedRunId={selectedRunId} onSelect={(run) => setSelectedRunId(run.id)} onExport={exportRun} />
+        </section>
+      </>
+    );
+  }
+
+  function renderCIIntegration() {
+    const testCaseId = selectedTest?.id ?? "TEST_CASE_ID";
+    const suiteName = selectedTest?.groupType === "CUSTOM" ? "Custom Test Suite" : `${selectedTest?.groupType ?? "SMOKE"} Test`;
+    const environmentName = selectedEnvironment?.name ?? "Dev";
+    const jenkinsBuildUrl = `${jenkinsConfig.url.replace(/\/$/, "")}/job/${encodeURIComponent(jenkinsConfig.jobName)}/buildWithParameters?BRANCH=${encodeURIComponent(jenkinsConfig.branch)}&TEST_CASE_ID=${encodeURIComponent(testCaseId)}&ENVIRONMENT=${encodeURIComponent(environmentName)}`;
+    const cliCommand = `npx prudent-qa run-test --test-case-id ${testCaseId} --environment ${environmentName} --browser chromium --headless true`;
+    const apiCommand = `curl -X POST ${apiBaseUrl}/api/ci/run-test \\
+  -H "Content-Type: application/json" \\
+  -d '{"testCaseId":"${testCaseId}","options":{"environment":"${environmentName}","browser":"chromium","headless":true}}'`;
+    const snippets = [
+      {
+        title: "GitHub Actions",
+        body: `name: Prudent QA\non:\n  workflow_dispatch:\n  schedule:\n    - cron: "0 6 * * *"\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n      - run: npm ci\n      - run: npx playwright install --with-deps chromium\n      - run: ${cliCommand}`
+      },
+      {
+        title: "GitLab CI",
+        body: `prudent_qa:\n  image: mcr.microsoft.com/playwright:v1.49.1-jammy\n  script:\n    - npm ci\n    - ${cliCommand}\n  only:\n    - schedules\n    - main`
+      },
+      {
+        title: "Azure DevOps",
+        body: `trigger:\n- main\nschedules:\n- cron: "0 6 * * *"\n  displayName: Daily QA run\n  branches:\n    include:\n    - main\npool:\n  vmImage: ubuntu-latest\nsteps:\n- task: NodeTool@0\n  inputs:\n    versionSpec: 20.x\n- script: npm ci\n- script: npx playwright install --with-deps chromium\n- script: ${cliCommand}`
+      },
+      {
+        title: "Generic API Trigger",
+        body: apiCommand
+      }
+    ];
+
+    return (
+      <>
+        <section className="panel">
+          <div className="panel-title">
+            <h2>Jenkins integration</h2>
+            <button className="primary" onClick={triggerJenkinsBuild}><Play size={18} /> Queue Jenkins build</button>
+          </div>
+          <div className="form-grid">
+            <label>Jenkins URL<input value={jenkinsConfig.url} onChange={(event) => setJenkinsConfig((current) => ({ ...current, url: event.target.value }))} /></label>
+            <label>Job name<input value={jenkinsConfig.jobName} onChange={(event) => setJenkinsConfig((current) => ({ ...current, jobName: event.target.value }))} /></label>
+            <label>Branch<input value={jenkinsConfig.branch} onChange={(event) => setJenkinsConfig((current) => ({ ...current, branch: event.target.value }))} /></label>
+            <label className="wide-field">Token<input value={jenkinsConfig.token} onChange={(event) => setJenkinsConfig((current) => ({ ...current, token: event.target.value }))} /></label>
+          </div>
+          <div className="ci-url-preview">
+            <span>Build URL</span>
+            <code>{jenkinsBuildUrl}</code>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-title">
+            <h2>Pipeline inputs</h2>
+            <span className="badge neutral">{environmentName}</span>
+          </div>
+          <div className="ci-summary-grid">
+            <div><span>Test case</span><strong>{selectedTest?.title ?? "Select a test"}</strong><code>{testCaseId}</code></div>
+            <div><span>Suite</span><strong>{suiteName}</strong><code>{selectedTest?.groupType ?? "SMOKE"}</code></div>
+            <div><span>Environment</span><strong>{environmentName}</strong><code>{selectedEnvironment?.baseUrl ?? "No base URL"}</code></div>
+            <div><span>CLI command</span><strong>Exit code enabled</strong><code>{cliCommand}</code></div>
+          </div>
+        </section>
+
+        <section className="ci-grid">
+          {snippets.map((snippet) => (
+            <article className="panel ci-snippet" key={snippet.title}>
+              <div className="panel-title">
+                <h2>{snippet.title}</h2>
+                <button className="secondary" onClick={() => navigator.clipboard?.writeText(snippet.body)}><Copy size={16} /> Copy</button>
+              </div>
+              <pre><code>{snippet.body}</code></pre>
+            </article>
+          ))}
         </section>
       </>
     );
@@ -1901,6 +1964,7 @@ function App() {
     if (page === "utilities") return renderUtilities();
     if (page === "suites") return renderSuites();
     if (page === "runs") return renderRuns();
+    if (page === "ci") return renderCIIntegration();
     if (page === "debug") return renderDebug();
     return renderReports();
   }
