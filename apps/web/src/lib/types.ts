@@ -104,6 +104,7 @@ export interface ScenarioData {
 export interface UtilityBlock {
   id: string;
   name: string;
+  category?: string;
   description: string;
   steps: TestStep[];
   updatedAt: string;

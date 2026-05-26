@@ -300,6 +300,7 @@ export const initialUtilities: UtilityBlock[] = [
   {
     id: "util-login",
     name: "Portal login",
+    category: "Authentication",
     description: "Shared login steps",
     updatedAt: "2026-05-21T13:15:00.000Z",
     steps: [

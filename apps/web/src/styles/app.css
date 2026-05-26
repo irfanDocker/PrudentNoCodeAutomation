@@ -703,6 +703,29 @@ label textarea {
   gap: 8px;
 }
 
+.utility-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.utility-tabs button {
+  min-height: 32px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #415064;
+  padding: 0 10px;
+}
+
+.utility-tabs button.active,
+.utility-tabs button:hover {
+  border-color: #176b65;
+  background: #edf7f5;
+  color: #0f5f59;
+}
+
 .utility-list-item {
   display: grid;
   gap: 4px;
