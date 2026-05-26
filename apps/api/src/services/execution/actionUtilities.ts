@@ -133,6 +133,37 @@ async function verifyText(page: Page, state: ExecutionState, step: TestStepInput
   await rootFor(page, state).getByText(expected, { exact: false }).waitFor({ state: "visible", timeout: timeoutMs });
 }
 
+function requireExpected(step: TestStepInput, label = "Expected result") {
+  const expected = step.expectedResult?.trim();
+  if (!expected) {
+    throw new Error(`${label} is required`);
+  }
+  return expected;
+}
+
+function compareNumbers(actual: number, comparator: string, expected: number) {
+  switch (comparator.trim()) {
+    case ">":
+      return actual > expected;
+    case ">=":
+      return actual >= expected;
+    case "<":
+      return actual < expected;
+    case "<=":
+      return actual <= expected;
+    case "!=":
+    case "!==":
+    case "not equals":
+      return actual !== expected;
+    case "=":
+    case "==":
+    case "===":
+    case "equals":
+    default:
+      return actual === expected;
+  }
+}
+
 function parseJson(value: string | null | undefined, label: string) {
   if (!value) {
     throw new Error(`${label} is required`);
@@ -309,6 +340,53 @@ export async function executeStepAction(page: Page, state: ExecutionState, step:
       if (!expected) throw new Error("string_contains requires expected result or locator value");
       if (!source.includes(expected)) throw new Error(`Expected "${source}" to contain "${expected}"`);
       return "String contains expected text";
+    }
+    case "assert_text_equals": {
+      const expected = requireExpected(step);
+      const text = ((await requireLocator(page, state, step).textContent({ timeout: timeoutMs })) ?? "").trim();
+      if (text !== expected) throw new Error(`Expected text to equal "${expected}", received "${text}"`);
+      return "Text equals assertion passed";
+    }
+    case "assert_text_contains": {
+      const expected = requireExpected(step);
+      const text = (await requireLocator(page, state, step).textContent({ timeout: timeoutMs })) ?? "";
+      if (!text.includes(expected)) throw new Error(`Expected text to contain "${expected}", received "${text}"`);
+      return "Text contains assertion passed";
+    }
+    case "assert_value_equals": {
+      const expected = requireExpected(step);
+      const value = await requireLocator(page, state, step).inputValue({ timeout: timeoutMs });
+      if (value !== expected) throw new Error(`Expected value to equal "${expected}", received "${value}"`);
+      return "Value equals assertion passed";
+    }
+    case "assert_visible":
+      await requireLocator(page, state, step).waitFor({ state: "visible", timeout: timeoutMs });
+      return "Visible assertion passed";
+    case "assert_hidden":
+      await requireLocator(page, state, step).waitFor({ state: "hidden", timeout: timeoutMs });
+      return "Hidden assertion passed";
+    case "assert_url_equals": {
+      const expected = requireExpected(step, "Expected URL");
+      const actual = page.url();
+      if (actual !== expected) throw new Error(`Expected URL to equal "${expected}", received "${actual}"`);
+      return "URL equals assertion passed";
+    }
+    case "assert_url_contains": {
+      const expected = requireExpected(step, "Expected URL fragment");
+      const actual = page.url();
+      if (!actual.includes(expected)) throw new Error(`Expected URL to contain "${expected}", received "${actual}"`);
+      return "URL contains assertion passed";
+    }
+    case "assert_number_compare": {
+      const actual = Number(step.inputValue);
+      const expected = Number(requireExpected(step, "Expected number"));
+      const comparator = step.locatorValue || "==";
+      if (!Number.isFinite(actual)) throw new Error(`Actual number must be numeric, received "${step.inputValue ?? ""}"`);
+      if (!Number.isFinite(expected)) throw new Error(`Expected number must be numeric, received "${step.expectedResult ?? ""}"`);
+      if (!compareNumbers(actual, comparator, expected)) {
+        throw new Error(`Expected ${actual} ${comparator} ${expected}`);
+      }
+      return "Number assertion passed";
     }
     case "switch_to_frame": {
       const selector = resolveFrameSelector(step);

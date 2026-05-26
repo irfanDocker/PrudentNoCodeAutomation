@@ -187,6 +187,41 @@ const actionFieldConfigs: Record<ActionType, ActionFieldConfig> = {
     labels: { inputValue: "JSON response/body", expectedResult: "Expected JSON subset" },
     multiline: ["inputValue", "expectedResult"]
   },
+  assert_text_equals: {
+    fields: ["locatorType", "locatorValue", "expectedResult"],
+    labels: { locatorValue: "Element locator", expectedResult: "Expected exact text" }
+  },
+  assert_text_contains: {
+    fields: ["locatorType", "locatorValue", "expectedResult"],
+    labels: { locatorValue: "Element locator", expectedResult: "Expected text contains" }
+  },
+  assert_value_equals: {
+    fields: ["locatorType", "locatorValue", "expectedResult"],
+    labels: { locatorValue: "Input locator", expectedResult: "Expected input value" }
+  },
+  assert_visible: {
+    fields: ["locatorType", "locatorValue"],
+    labels: { locatorValue: "Visible element locator" }
+  },
+  assert_hidden: {
+    fields: ["locatorType", "locatorValue"],
+    labels: { locatorValue: "Hidden element locator" }
+  },
+  assert_url_equals: {
+    fields: ["expectedResult"],
+    labels: { expectedResult: "Expected exact URL" },
+    placeholders: { expectedResult: "https://example.com/dashboard" }
+  },
+  assert_url_contains: {
+    fields: ["expectedResult"],
+    labels: { expectedResult: "Expected URL contains" },
+    placeholders: { expectedResult: "/dashboard" }
+  },
+  assert_number_compare: {
+    fields: ["inputValue", "locatorValue", "expectedResult"],
+    labels: { inputValue: "Actual number", locatorValue: "Comparator", expectedResult: "Expected number" },
+    placeholders: { inputValue: "{{total}}", locatorValue: ">, >=, <, <=, ==", expectedResult: "0" }
+  },
   loop_start: {
     fields: ["inputValue"],
     labels: { inputValue: "Repeat count" },
