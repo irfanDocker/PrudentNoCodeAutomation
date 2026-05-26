@@ -686,13 +686,52 @@ label textarea {
   font-weight: 800;
 }
 
-.utility-card {
-  align-content: start;
+.utility-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.38fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.utility-list-panel,
+.utility-detail-panel {
+  min-height: 420px;
+}
+
+.utility-list {
+  display: grid;
+  gap: 8px;
+}
+
+.utility-list-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 78px;
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #263342;
+  padding: 12px;
+  text-align: left;
+}
+
+.utility-list-item:hover,
+.utility-list-item.active {
+  border-color: #176b65;
+  background: #f1faf8;
+}
+
+.utility-list-item span,
+.utility-list-item small {
+  color: #657384;
+  font-size: 13px;
 }
 
 .utility-steps {
   display: grid;
   gap: 8px;
+  margin: 14px 0;
 }
 
 .utility-step {
@@ -1044,6 +1083,7 @@ label textarea {
   .suite-grid,
   .ci-grid,
   .ci-summary-grid,
+  .utility-layout,
   .recorder-layout,
   .config-layout,
   .run-control-grid,
@@ -1114,6 +1154,7 @@ label textarea {
   .suite-grid,
   .ci-grid,
   .ci-summary-grid,
+  .utility-layout,
   .recorder-layout,
   .config-layout,
   .run-control-grid,

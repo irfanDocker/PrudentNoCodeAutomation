@@ -482,6 +482,7 @@ function App() {
   const [selectedDataSetId, setSelectedDataSetId] = useState(() => readStored(storageKeys.dataSets, initialDataSets)[0]?.id ?? "");
   const [selectedDataRowId, setSelectedDataRowId] = useState("");
   const [selectedScenarioId, setSelectedScenarioId] = useState(() => readStored(storageKeys.scenarioData, initialScenarioData)[0]?.id ?? "");
+  const [selectedUtilityId, setSelectedUtilityId] = useState(() => readStored(storageKeys.utilities, initialUtilities)[0]?.id ?? "");
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<SuiteType | "ALL">("ALL");
   const [dataRunMode, setDataRunMode] = useState<"single" | "all">("single");
@@ -496,6 +497,7 @@ function App() {
   const selectedEnvironment = environments.find((environment) => environment.id === selectedEnvironmentId) ?? environments[0];
   const selectedDataSet = dataSets.find((dataSet) => dataSet.id === selectedDataSetId) ?? dataSets[0];
   const selectedScenario = scenarioData.find((scenario) => scenario.id === selectedScenarioId) ?? scenarioData[0];
+  const selectedUtility = utilities.find((utility) => utility.id === selectedUtilityId) ?? utilities[0];
   const selectedDataRows = dataRowsForDataSet(selectedDataSet);
   const selectedDataRow = selectedDataRows.find((row) => row.id === selectedDataRowId) ?? selectedDataRows[0];
   const selectedDataColumns = dataColumnNames(selectedDataSet);
@@ -541,6 +543,12 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(storageKeys.utilities, JSON.stringify(utilities));
   }, [utilities]);
+
+  useEffect(() => {
+    if (utilities.length && !utilities.some((utility) => utility.id === selectedUtilityId)) {
+      setSelectedUtilityId(utilities[0].id);
+    }
+  }, [selectedUtilityId, utilities]);
 
   useEffect(() => {
     window.localStorage.setItem(storageKeys.jenkinsConfig, JSON.stringify(jenkinsConfig));
@@ -736,6 +744,7 @@ function App() {
       steps: cloneStepsForInsert(selectedTest.steps, 1)
     };
     setUtilities((current) => [utility, ...current]);
+    setSelectedUtilityId(utility.id);
     setPage("utilities");
   }
 
@@ -748,6 +757,13 @@ function App() {
           : utility
       )
     );
+  }
+
+  function deleteUtility(utilityId: string) {
+    setUtilities((current) => current.filter((utility) => utility.id !== utilityId));
+    if (selectedUtilityId === utilityId) {
+      setSelectedUtilityId(utilities.find((utility) => utility.id !== utilityId)?.id ?? "");
+    }
   }
 
   function addEnvironment() {
@@ -1699,36 +1715,60 @@ function App() {
 
   function renderUtilities() {
     return (
-      <div className="config-layout">
-        <section className="panel config-panel">
+      <div className="utility-layout">
+        <section className="panel utility-list-panel">
           <div className="panel-title">
             <h2>Reusable utilities</h2>
             <button className="secondary" onClick={createUtilityFromSelectedTest}><Save size={18} /> Save selected test</button>
           </div>
-          <div className="config-list">
+          <div className="utility-list">
             {utilities.map((utility) => (
-              <div className="config-card utility-card" key={utility.id}>
-                <div className="form-grid">
-                  <label>Name<input value={utility.name} onChange={(event) => setUtilities((current) => current.map((item) => item.id === utility.id ? { ...item, name: event.target.value, updatedAt: new Date().toISOString() } : item))} /></label>
-                  <label>Description<input value={utility.description} onChange={(event) => setUtilities((current) => current.map((item) => item.id === utility.id ? { ...item, description: event.target.value, updatedAt: new Date().toISOString() } : item))} /></label>
-                </div>
-                <div className="utility-steps">
-                  {utility.steps.map((step) => (
-                    <div className="utility-step" key={step.id}>
-                      <strong>{step.stepNumber}</strong>
-                      <span>{actionLabels[step.actionType]}</span>
-                      <small>{stepDetailText(step)}</small>
-                    </div>
-                  ))}
-                </div>
-                <div className="config-actions">
-                  <button className="secondary" onClick={() => insertUtility(utility)}>Insert</button>
-                  <button className="secondary" onClick={() => updateUtilityFromSelectedTest(utility.id)}>Replace from selected test</button>
-                  <button className="icon-button danger-icon" title="Delete utility" onClick={() => setUtilities((current) => current.filter((item) => item.id !== utility.id))}><Trash2 size={16} /></button>
-                </div>
-              </div>
+              <button
+                className={`utility-list-item${selectedUtility?.id === utility.id ? " active" : ""}`}
+                key={utility.id}
+                onClick={() => setSelectedUtilityId(utility.id)}
+              >
+                <strong>{utility.name}</strong>
+                <span>{utility.steps.length} steps</span>
+                <small>{utility.description || "No description"}</small>
+              </button>
             ))}
           </div>
+        </section>
+
+        <section className="panel utility-detail-panel">
+          {selectedUtility ? (
+            <>
+              <div className="panel-title">
+                <h2>{selectedUtility.name}</h2>
+                <span className="badge neutral">{selectedUtility.steps.length} steps</span>
+              </div>
+              <div className="form-grid">
+                <label>Name<input value={selectedUtility.name} onChange={(event) => setUtilities((current) => current.map((item) => item.id === selectedUtility.id ? { ...item, name: event.target.value, updatedAt: new Date().toISOString() } : item))} /></label>
+                <label>Description<input value={selectedUtility.description} onChange={(event) => setUtilities((current) => current.map((item) => item.id === selectedUtility.id ? { ...item, description: event.target.value, updatedAt: new Date().toISOString() } : item))} /></label>
+              </div>
+              <div className="utility-steps">
+                {selectedUtility.steps.map((step) => (
+                  <div className="utility-step" key={step.id}>
+                    <strong>{step.stepNumber}</strong>
+                    <span>{actionLabels[step.actionType]}</span>
+                    <small>{stepDetailText(step)}</small>
+                  </div>
+                ))}
+              </div>
+              <div className="config-actions">
+                <button className="secondary" onClick={() => insertUtility(selectedUtility)}>Insert into selected test</button>
+                <button className="secondary" onClick={() => updateUtilityFromSelectedTest(selectedUtility.id)}>Replace from selected test</button>
+                <button className="icon-button danger-icon" title="Delete utility" onClick={() => deleteUtility(selectedUtility.id)}><Trash2 size={16} /></button>
+              </div>
+            </>
+          ) : (
+            <div className="empty-state">
+              <PlugZap size={42} />
+              <h2>No utility selected</h2>
+              <p>Save a selected test as a utility to reuse its steps.</p>
+            </div>
+          )}
         </section>
       </div>
     );
