@@ -19,7 +19,16 @@ export const actionTypes = [
   "database_connection",
   "api_call",
   "schema_validation",
-  "json_validation"
+  "json_validation",
+  "loop_start",
+  "loop_end",
+  "if",
+  "else",
+  "end_if",
+  "switch",
+  "case",
+  "default",
+  "end_switch"
 ] as const;
 
 export const actionLabels: Record<(typeof actionTypes)[number], string> = {
@@ -41,7 +50,16 @@ export const actionLabels: Record<(typeof actionTypes)[number], string> = {
   database_connection: "Database connection",
   api_call: "API call",
   schema_validation: "Schema validation",
-  json_validation: "JSON validation"
+  json_validation: "JSON validation",
+  loop_start: "Loop start",
+  loop_end: "Loop end",
+  if: "If",
+  else: "Else",
+  end_if: "End if",
+  switch: "Switch",
+  case: "Case",
+  default: "Default",
+  end_switch: "End switch"
 };
 
 export const locatorTypes = ["css", "xpath", "text", "role", "label", "placeholder"] as const;

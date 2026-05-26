@@ -254,6 +254,16 @@ export async function executeStepAction(page: Page, state: ExecutionState, step:
   const timeoutMs = step.timeoutMs ?? options.timeoutMs ?? 10000;
 
   switch (step.actionType) {
+    case "loop_start":
+    case "loop_end":
+    case "if":
+    case "else":
+    case "end_if":
+    case "switch":
+    case "case":
+    case "default":
+    case "end_switch":
+      return "Control flow handled";
     case "goto":
       await page.goto(resolveNavigationUrl(options.baseUrl, step.inputValue ?? step.locatorValue), {
         waitUntil: "domcontentloaded",
@@ -355,4 +365,3 @@ export async function executeStepAction(page: Page, state: ExecutionState, step:
       throw new Error(`Unsupported action type: ${step.actionType}`);
   }
 }
-

@@ -19,7 +19,16 @@ export const actionTypes = [
   "database_connection",
   "api_call",
   "schema_validation",
-  "json_validation"
+  "json_validation",
+  "loop_start",
+  "loop_end",
+  "if",
+  "else",
+  "end_if",
+  "switch",
+  "case",
+  "default",
+  "end_switch"
 ] as const;
 
 export const locatorTypes = ["css", "xpath", "text", "role", "label", "placeholder"] as const;

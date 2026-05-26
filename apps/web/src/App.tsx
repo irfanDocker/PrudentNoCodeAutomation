@@ -186,6 +186,51 @@ const actionFieldConfigs: Record<ActionType, ActionFieldConfig> = {
     fields: ["inputValue", "expectedResult"],
     labels: { inputValue: "JSON response/body", expectedResult: "Expected JSON subset" },
     multiline: ["inputValue", "expectedResult"]
+  },
+  loop_start: {
+    fields: ["inputValue"],
+    labels: { inputValue: "Repeat count" },
+    placeholders: { inputValue: "3 or {{rowCount}}" }
+  },
+  loop_end: {
+    fields: [],
+    labels: {},
+    emptyText: "Ends the nearest loop block."
+  },
+  if: {
+    fields: ["inputValue", "locatorValue", "expectedResult"],
+    labels: { inputValue: "Actual value", locatorValue: "Condition", expectedResult: "Expected value" },
+    placeholders: { inputValue: "{{status}}", locatorValue: "equals, contains, not empty, true", expectedResult: "READY" }
+  },
+  else: {
+    fields: [],
+    labels: {},
+    emptyText: "Runs when the matching If is false."
+  },
+  end_if: {
+    fields: [],
+    labels: {},
+    emptyText: "Ends the nearest If block."
+  },
+  switch: {
+    fields: ["inputValue"],
+    labels: { inputValue: "Switch value" },
+    placeholders: { inputValue: "{{userType}}" }
+  },
+  case: {
+    fields: ["inputValue"],
+    labels: { inputValue: "Case value" },
+    placeholders: { inputValue: "admin" }
+  },
+  default: {
+    fields: [],
+    labels: {},
+    emptyText: "Runs when no Case matches."
+  },
+  end_switch: {
+    fields: [],
+    labels: {},
+    emptyText: "Ends the nearest Switch block."
   }
 };
 
